@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "287540285495",
+    "project_id": "personal-spendings-531a1",
+    "storage_bucket": "personal-spendings-531a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:287540285495:android:a0e142db949f19b9de6fb2",
+        "android_client_info": {
+          "package_name": "com.example.personal_spendings"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKzBTOKm_kvtcfGCFiJfMzs794RSUkCoA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
