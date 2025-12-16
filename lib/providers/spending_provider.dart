@@ -106,6 +106,10 @@ class SpendingProvider extends ChangeNotifier {
 
   /// dateKey -> total amount
   final Map<String, double> _dailySpendings = {};
+  String _p(String uid, String key) => 'u:$uid:$key';
+
+  String _stripPrefix(String uid, String fullKey) =>
+      fullKey.replaceFirst('u:$uid:', '');
 
   /// dateKey -> list of entries
   final Map<String, List<SpendingEntry>> _dailyEntries = {};
@@ -195,10 +199,11 @@ class SpendingProvider extends ChangeNotifier {
   // --------------------------------------------------
   // load all LOCAL data
   // --------------------------------------------------
-  Future<void> loadData() async {
+  Future<void> loadData(String uid) async {
+    _userId = uid; // ✅ important
     final prefs = await SharedPreferences.getInstance();
 
-    _monthlyBudget = prefs.getDouble('monthlyBudget') ?? 0;
+    _monthlyBudget = prefs.getDouble(_p(uid, 'monthlyBudget')) ?? 0;
 
     _dailySpendings.clear();
     _dailyEntries.clear();
@@ -206,15 +211,17 @@ class SpendingProvider extends ChangeNotifier {
     _recurringPayments.clear();
     _categoryCanon.clear();
 
-    for (final key in prefs.getKeys()) {
+    for (final key in prefs.getKeys().where((k) => k.startsWith('u:$uid:'))) {
+      final localKey = _stripPrefix(uid, key);
       // ----- Spendings -----
-      if (key.startsWith('spend_')) {
-        final amount = prefs.getDouble(key) ?? 0;
-        final dateStr = key.replaceFirst('spend_', '');
+      if (localKey.startsWith('spend_')) {
+        final amount = prefs.getDouble(key) ?? 0; // keep `key` here (full key)
+        final dateStr = localKey.replaceFirst('spend_', '');
         _dailySpendings[dateStr] = amount;
       }
-      if (key.startsWith('spendEntries_')) {
-        final dateStr = key.replaceFirst('spendEntries_', '');
+
+      if (localKey.startsWith('spendEntries_')) {
+        final dateStr = localKey.replaceFirst('spendEntries_', '');
         final raw = prefs.getString(key);
         if (raw != null && raw.isNotEmpty) {
           final List decoded = jsonDecode(raw);
@@ -231,12 +238,8 @@ class SpendingProvider extends ChangeNotifier {
         }
       }
 
-      // ----- Income -----
-      if (key.startsWith('income_')) {
-        // we don't actually need income totals here, will be re-calculated
-      }
-      if (key.startsWith('incomeEntries_')) {
-        final dateStr = key.replaceFirst('incomeEntries_', '');
+      if (localKey.startsWith('incomeEntries_')) {
+        final dateStr = localKey.replaceFirst('incomeEntries_', '');
         final raw = prefs.getString(key);
         if (raw != null && raw.isNotEmpty) {
           final List decoded = jsonDecode(raw);
@@ -248,8 +251,9 @@ class SpendingProvider extends ChangeNotifier {
     }
 
     // load period if exists, else current month
-    final periodStartStr = prefs.getString('period_start');
-    final periodEndStr = prefs.getString('period_end');
+    final periodStartStr = prefs.getString(_p(uid, 'period_start'));
+    final periodEndStr = prefs.getString(_p(uid, 'period_end'));
+
     if (periodStartStr != null && periodEndStr != null) {
       _periodStart = DateTime.parse(periodStartStr);
       _periodEnd = DateTime.parse(periodEndStr);
@@ -258,7 +262,8 @@ class SpendingProvider extends ChangeNotifier {
     }
 
     // load recurring payments
-    final recurringRaw = prefs.getString('recurringPayments');
+    final recurringRaw = prefs.getString(_p(uid, 'recurringPayments'));
+
     if (recurringRaw != null && recurringRaw.isNotEmpty) {
       try {
         final List decoded = jsonDecode(recurringRaw);
@@ -295,19 +300,31 @@ class SpendingProvider extends ChangeNotifier {
   // connect to FIRESTORE when user is known
   // --------------------------------------------------
   Future<void> attachUser(String? uid) async {
-    // called from UI (HomeScreen) each build, so guard:
+    // Only clear when switching between two real users
+    if (_userId != null && uid != null && _userId != uid) {
+      _dailySpendings.clear();
+      _dailyEntries.clear();
+      _incomeByDate.clear();
+      _recurringPayments.clear();
+      _categoryCanon.clear();
+      _todayTotal = 0;
+      _periodTotal = 0;
+      _periodIncomeTotal = 0;
+      _remoteLoaded = false;
+    }
+
     if (uid == null) {
       _userId = null;
       _remoteLoaded = false;
       return;
     }
+
     if (_userId == uid && _remoteLoaded) {
       return;
     }
 
     _userId = uid;
 
-    // try to pull remote data
     try {
       final meta = await FirestoreService.instance.getUserMeta(uid);
       if (meta != null) {
@@ -326,6 +343,7 @@ class SpendingProvider extends ChangeNotifier {
       for (final d in days) {
         final data = d.data();
         final dateKey = data['date'] as String;
+
         final entriesRaw = (data['entries'] as List<dynamic>? ?? []);
         final entries = entriesRaw.map((e) {
           final entry = SpendingEntry.fromJson(e as Map<String, dynamic>);
@@ -339,20 +357,22 @@ class SpendingProvider extends ChangeNotifier {
         }).toList();
 
         _dailyEntries[dateKey] = entries;
+
         final total =
             (data['total'] as num?)?.toDouble() ??
-            entries.fold(0.0, (s, e) => s! + e.amount);
+            entries.fold(0.0, (sum, e) => sum! + e.amount);
+
         _dailySpendings[dateKey] = total!;
       }
 
       _periodTotal = _calculateTotalForPeriod();
-      // income is currently local-only; you could extend FirestoreService for it later
       _periodIncomeTotal = _calculateIncomeTotalForPeriod();
 
       _remoteLoaded = true;
 
-      // keep also in local
+      // save user-scoped local cache
       await _saveAllLocal();
+
       notifyListeners();
     } catch (_) {
       // ignore: if rules forbid or offline, we just keep local
@@ -684,10 +704,12 @@ class SpendingProvider extends ChangeNotifier {
     final double newTotal = dayEntries.fold(0.0, (sum, e) => sum + e.amount);
 
     _dailySpendings[dateKey] = newTotal;
-    await prefs.setDouble('spend_$dateKey', newTotal);
 
     final entriesJson = jsonEncode(dayEntries.map((e) => e.toJson()).toList());
-    await prefs.setString('spendEntries_$dateKey', entriesJson);
+    if (_userId == null) return;
+    final uid = _userId!;
+    await prefs.setDouble(_p(uid, 'spend_$dateKey'), newTotal);
+    await prefs.setString(_p(uid, 'spendEntries_$dateKey'), entriesJson);
 
     if (_dateKey(_today) == dateKey) {
       _todayTotal = newTotal;
@@ -712,9 +734,11 @@ class SpendingProvider extends ChangeNotifier {
     final dayEntries = _incomeByDate[dateKey] ?? const <IncomeEntry>[];
     final double newTotal = dayEntries.fold(0.0, (sum, e) => sum + e.amount);
 
-    await prefs.setDouble('income_$dateKey', newTotal);
+    if (_userId == null) return;
+    final uid = _userId!;
+    await prefs.setDouble(_p(uid, 'income_$dateKey'), newTotal);
     await prefs.setString(
-      'incomeEntries_$dateKey',
+      _p(uid, 'incomeEntries_$dateKey'),
       jsonEncode(dayEntries.map((e) => e.toJson()).toList()),
     );
 
@@ -1056,27 +1080,41 @@ class SpendingProvider extends ChangeNotifier {
   // ---------- local save helpers ----------
   Future<void> _saveMetaLocal() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('monthlyBudget', _monthlyBudget);
+    if (_userId == null) return;
+    final uid = _userId!;
+    await prefs.setDouble(_p(uid, 'monthlyBudget'), _monthlyBudget);
+
     if (_periodStart != null) {
-      await prefs.setString('period_start', _periodStart!.toIso8601String());
+      await prefs.setString(
+        _p(uid, 'period_start'),
+        _periodStart!.toIso8601String(),
+      );
     }
     if (_periodEnd != null) {
-      await prefs.setString('period_end', _periodEnd!.toIso8601String());
+      await prefs.setString(
+        _p(uid, 'period_end'),
+        _periodEnd!.toIso8601String(),
+      );
     }
   }
 
   Future<void> _saveAllLocal() async {
+    // Must be user-scoped, otherwise accounts will mix.
+    if (_userId == null) return;
+    final uid = _userId!;
+
     final prefs = await SharedPreferences.getInstance();
-    await _saveMetaLocal();
+    await _saveMetaLocal(); // make sure _saveMetaLocal() also uses uid-scoped keys
 
     // save all spending days
     for (final entry in _dailyEntries.entries) {
       final dateKey = entry.key;
       final dayEntries = entry.value;
       final total = dayEntries.fold(0.0, (s, e) => s + e.amount);
-      await prefs.setDouble('spend_$dateKey', total);
+
+      await prefs.setDouble(_p(uid, 'spend_$dateKey'), total);
       await prefs.setString(
-        'spendEntries_$dateKey',
+        _p(uid, 'spendEntries_$dateKey'),
         jsonEncode(dayEntries.map((e) => e.toJson()).toList()),
       );
     }
@@ -1086,20 +1124,25 @@ class SpendingProvider extends ChangeNotifier {
       final dateKey = entry.key;
       final dayEntries = entry.value;
       final total = dayEntries.fold(0.0, (s, e) => s + e.amount);
-      await prefs.setDouble('income_$dateKey', total);
+
+      await prefs.setDouble(_p(uid, 'income_$dateKey'), total);
       await prefs.setString(
-        'incomeEntries_$dateKey',
+        _p(uid, 'incomeEntries_$dateKey'),
         jsonEncode(dayEntries.map((e) => e.toJson()).toList()),
       );
     }
 
     // save recurring
-    await _saveRecurringLocal(prefs);
+    await _saveRecurringLocal(
+      prefs,
+    ); // this must also use _p(uid, 'recurringPayments')
   }
 
   Future<void> _saveRecurringLocal(SharedPreferences prefs) async {
+    if (_userId == null) return;
+    final uid = _userId!;
     await prefs.setString(
-      'recurringPayments',
+      _p(uid, 'recurringPayments'),
       jsonEncode(_recurringPayments.map((e) => e.toJson()).toList()),
     );
   }

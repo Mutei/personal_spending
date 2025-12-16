@@ -23,14 +23,10 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => SpendingProvider()..loadData()),
-        ChangeNotifierProvider(
-          create: (_) => OtherSpendingProvider()..loadData(),
-        ),
-        ChangeNotifierProvider(create: (_) => AppLockService()), // 👈 NEW
-        ChangeNotifierProvider(
-          create: (_) => SecureValuesLockService(),
-        ), // 👈 NEW
+        ChangeNotifierProvider(create: (_) => SpendingProvider()),
+        ChangeNotifierProvider(create: (_) => OtherSpendingProvider()),
+        ChangeNotifierProvider(create: (_) => AppLockService()),
+        ChangeNotifierProvider(create: (_) => SecureValuesLockService()),
       ],
       child: const MyApp(),
     ),
