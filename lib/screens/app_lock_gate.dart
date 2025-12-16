@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_lock_service.dart';
+import '../services/auth_service.dart';
 
 class AppLockGate extends StatefulWidget {
   final Widget child;
@@ -51,12 +52,19 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AppLockService>(
-      builder: (context, lock, _) {
+    return Consumer2<AppLockService, AuthService>(
+      builder: (context, lock, auth, _) {
+        // ✅ If user is NOT logged in, never show biometrics
+        if (!auth.isLoggedIn) {
+          return widget.child;
+        }
+
+        // ✅ Logged in but lock disabled or already unlocked
         if (!lock.isEnabled || lock.isUnlocked) {
           return widget.child;
         }
 
+        // ✅ Logged in + lock enabled + locked => show unlock screen
         return Scaffold(
           body: Center(
             child: Padding(
@@ -75,22 +83,17 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.fingerprint),
-                      label: Text(_authInProgress ? "Unlocking..." : "Unlock"),
-                      onPressed: _authInProgress
-                          ? null
-                          : () async {
-                              setState(() => _authInProgress = true);
-                              final ok = await lock.authenticate();
-                              if (!ok && mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Authentication failed"),
-                                  ),
-                                );
-                              }
-                              if (mounted)
-                                setState(() => _authInProgress = false);
-                            },
+                      label: const Text("Unlock"),
+                      onPressed: () async {
+                        final ok = await lock.authenticate();
+                        if (!ok && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Authentication failed"),
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ),
                 ],

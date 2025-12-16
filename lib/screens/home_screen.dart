@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/secure_values_lock_service.dart';
 import '../providers/spending_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/auth_service.dart';
@@ -22,7 +23,31 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SecureValuesLockService>().lock();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      context.read<SecureValuesLockService>().lock();
+    }
+  }
+
   DateTime _selectedDate = DateTime.now();
   final _dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -137,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         onLogout: () async {
           Navigator.pop(context);
+          context.read<AppLockService>().lockAgain(); // ✅ reset
           await context.read<AuthService>().signOut();
         },
       ),
@@ -246,9 +272,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _infoColumn('Budget', budget),
-                        _infoColumn('Spent', periodTotal),
-                        _infoColumn('Remaining', remaining),
+                        _secureInfoColumn(
+                          context,
+                          title: 'Budget',
+                          value: budget,
+                        ),
+                        _secureInfoColumn(
+                          context,
+                          title: 'Spent',
+                          value: periodTotal,
+                        ),
+                        _secureInfoColumn(
+                          context,
+                          title: 'Remaining',
+                          value: remaining,
+                        ),
                       ],
                     ),
                   ],
@@ -667,33 +705,69 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // ------------- Helper UI widget -------------
-  Widget _infoColumn(String title, double value) {
-    return Column(
-      children: [
-        const Text(
-          ' ', // keep titles in the row labels (“Budget / Spent / Remaining”)
-          style: TextStyle(color: Colors.transparent, fontSize: 0),
-        ),
-        const Text(
-          // small label under the invisible line
-          '',
-          style: TextStyle(fontSize: 0),
-        ),
-        Text(
-          title,
-          style: const TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value.toStringAsFixed(2),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+  Widget _secureInfoColumn(
+    BuildContext context, {
+    required String title,
+    required double value,
+  }) {
+    final secure = context.watch<SecureValuesLockService>();
+    final locked = secure.isLocked;
+
+    Future<void> _unlock() async {
+      final ok = await context
+          .read<SecureValuesLockService>()
+          .unlockWithBiometrics();
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Unlock failed")));
+      }
+    }
+
+    void _lockAgain() {
+      context.read<SecureValuesLockService>().lock();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("🔒 Locked again")));
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        if (locked) {
+          await _unlock(); // biometrics
+        } else {
+          _lockAgain(); // no biometrics
+        }
+      },
+      child: Column(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(
+            locked ? "••••" : value.toStringAsFixed(2),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Icon(
+            locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+            size: 16,
+            color: Colors.white70,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            locked ? "Tap to unlock" : "Tap to lock",
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 }

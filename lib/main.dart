@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:personal_spendings/providers/secure_values_lock_service.dart';
 import 'package:personal_spendings/screens/app_lock_gate.dart';
 import 'package:personal_spendings/screens/auth_gate.dart';
 import 'package:personal_spendings/services/app_lock_service.dart';
@@ -27,6 +28,9 @@ void main() async {
           create: (_) => OtherSpendingProvider()..loadData(),
         ),
         ChangeNotifierProvider(create: (_) => AppLockService()), // 👈 NEW
+        ChangeNotifierProvider(
+          create: (_) => SecureValuesLockService(),
+        ), // 👈 NEW
       ],
       child: const MyApp(),
     ),
