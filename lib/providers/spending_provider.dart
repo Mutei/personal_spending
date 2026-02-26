@@ -300,8 +300,13 @@ class SpendingProvider extends ChangeNotifier {
   // connect to FIRESTORE when user is known
   // --------------------------------------------------
   Future<void> attachUser(String? uid) async {
-    // Only clear when switching between two real users
-    if (_userId != null && uid != null && _userId != uid) {
+    // If logging out
+    if (uid == null) {
+      _userId = null;
+      _remoteLoaded = false;
+
+      // Clear local in-memory values so UI doesn't show previous user
+      _monthlyBudget = 0;
       _dailySpendings.clear();
       _dailyEntries.clear();
       _incomeByDate.clear();
@@ -310,18 +315,35 @@ class SpendingProvider extends ChangeNotifier {
       _todayTotal = 0;
       _periodTotal = 0;
       _periodIncomeTotal = 0;
-      _remoteLoaded = false;
-    }
+      _periodStart = null;
+      _periodEnd = null;
 
-    if (uid == null) {
-      _userId = null;
-      _remoteLoaded = false;
+      notifyListeners();
       return;
     }
 
-    if (_userId == uid && _remoteLoaded) {
-      return;
+    // If switching users
+    if (_userId != null && _userId != uid) {
+      _remoteLoaded = false;
+
+      // Clear local in-memory values immediately
+      _monthlyBudget = 0;
+      _dailySpendings.clear();
+      _dailyEntries.clear();
+      _incomeByDate.clear();
+      _recurringPayments.clear();
+      _categoryCanon.clear();
+      _todayTotal = 0;
+      _periodTotal = 0;
+      _periodIncomeTotal = 0;
+      _periodStart = null;
+      _periodEnd = null;
+
+      notifyListeners(); // ✅ important: update UI right away
     }
+
+    // If already loaded for same user
+    if (_userId == uid && _remoteLoaded) return;
 
     _userId = uid;
 
@@ -365,17 +387,23 @@ class SpendingProvider extends ChangeNotifier {
         _dailySpendings[dateKey] = total!;
       }
 
+      // if no period from remote, use current month
+      if (_periodStart == null || _periodEnd == null) {
+        _setCurrentMonthPeriodInternal();
+      }
+
+      _today = DateTime.now();
+      _todayTotal = _dailySpendings[_dateKey(_today)] ?? 0;
+
       _periodTotal = _calculateTotalForPeriod();
       _periodIncomeTotal = _calculateIncomeTotalForPeriod();
 
       _remoteLoaded = true;
 
-      // save user-scoped local cache
       await _saveAllLocal();
-
       notifyListeners();
     } catch (_) {
-      // ignore: if rules forbid or offline, we just keep local
+      // keep local if remote fails
     }
   }
 

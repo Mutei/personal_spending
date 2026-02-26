@@ -57,16 +57,27 @@ class FirestoreService {
   Future<void> saveUserMeta({
     required String uid,
     required double monthlyBudget,
+    double? monthlySpendingTarget,
     DateTime? periodStart,
     DateTime? periodEnd,
   }) async {
-    await userDoc(uid).set({
+    final data = <String, dynamic>{
       'monthlyBudget': monthlyBudget,
-      'periodStart': periodStart?.toIso8601String(),
-      'periodEnd': periodEnd?.toIso8601String(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    };
+
+    if (monthlySpendingTarget != null) {
+      data['monthlySpendingTarget'] = monthlySpendingTarget;
+    }
+    if (periodStart != null) {
+      data['periodStart'] = periodStart.toIso8601String();
+    }
+    if (periodEnd != null) {
+      data['periodEnd'] = periodEnd.toIso8601String();
+    }
+
+    await usersCol.doc(uid).set(data, SetOptions(merge: true));
   }
+
 
   /// read user meta
   Future<Map<String, dynamic>?> getUserMeta(String uid) async {

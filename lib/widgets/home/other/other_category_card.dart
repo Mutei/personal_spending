@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../../providers/other_spending_provider.dart';
 
 class OtherCategoryCard extends StatelessWidget {
@@ -27,119 +26,157 @@ class OtherCategoryCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    final double total = entries.fold(
-      0,
-      (previousValue, e) => previousValue + e.amount,
-    );
+    final total = entries.fold(0.0, (p, e) => p + e.amount);
+    final latest = entries.isEmpty
+        ? null
+        : (entries.map((e) => e.date).toList()..sort((a, b) => b.compareTo(a)))
+              .first;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 1,
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        childrenPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 8,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openDetails(context),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.35)),
         ),
-        collapsedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        leading: CircleAvatar(
-          backgroundColor: cs.primary.withOpacity(0.12),
-          child: Text(
-            category.isNotEmpty ? category[0].toUpperCase() : '?',
-            style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(
-          category,
-          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          'Total: ${total.toStringAsFixed(2)} • ${entries.length} payments',
-          style: text.bodySmall,
-        ),
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              icon: Icon(Icons.delete_outline, color: cs.error),
-              label: Text(
-                'Delete category',
-                style: text.bodySmall?.copyWith(
-                  color: cs.error,
-                  fontWeight: FontWeight.w500,
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: cs.primary.withOpacity(0.12),
+              child: Text(
+                category.isNotEmpty ? category[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              onPressed: onDeleteCategory,
             ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'Item',
-                  style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${entries.length} payments'
+                    '${latest == null ? '' : ' • last ${fmt.format(latest)}'}',
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
               ),
-              Expanded(
-                child: Text(
-                  'Amount',
-                  textAlign: TextAlign.right,
-                  style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  total.toStringAsFixed(2),
+                  style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
-              ),
-              Expanded(
-                child: Text(
-                  'Date',
-                  textAlign: TextAlign.right,
-                  style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                const SizedBox(height: 2),
+                Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openDetails(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          const Divider(),
-          ...entries.map(
-            (e) => InkWell(
-              onTap: () => onEditEntry(e),
-              onLongPress: () => onDeleteEntry(e),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: Row(
+                const SizedBox(height: 12),
+                Row(
                   children: [
                     Expanded(
-                      flex: 2,
                       child: Text(
-                        (e.title == null || e.title!.isEmpty) ? '-' : e.title!,
-                        style: text.bodySmall,
+                        category,
+                        style: text.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        e.amount.toStringAsFixed(2),
-                        textAlign: TextAlign.right,
-                        style: text.bodySmall,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        fmt.format(e.date),
-                        textAlign: TextAlign.right,
-                        style: text.bodySmall,
-                      ),
+                    IconButton(
+                      tooltip: "Delete category",
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        onDeleteCategory();
+                      },
+                      icon: Icon(Icons.delete_outline, color: cs.error),
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: 6),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: entries.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final e = entries[i];
+                      return ListTile(
+                        title: Text(
+                          (e.title == null || e.title!.isEmpty)
+                              ? '-'
+                              : e.title!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(fmt.format(e.date)),
+                        trailing: Text(
+                          e.amount.toStringAsFixed(2),
+                          style: text.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        onTap: () => onEditEntry(e),
+                        onLongPress: () => onDeleteEntry(e),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

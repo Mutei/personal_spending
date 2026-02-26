@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../models/saved_account.dart';
+import '../services/account_store.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? initialIdentifier;
+  final bool fromAccountSwitcher;
+
+  const LoginScreen({
+    super.key,
+    this.initialIdentifier,
+    this.fromAccountSwitcher = false,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -15,6 +24,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passController = TextEditingController();
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _idController.text = widget.initialIdentifier ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -143,24 +158,39 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  final _accountStore = AccountStore();
   Future<void> _login() async {
     setState(() {
       _loading = true;
       _error = null;
     });
+
     try {
-      await context.read<AuthService>().signIn(
+      final auth = context.read<AuthService>();
+
+      await auth.signIn(
         identifier: _idController.text.trim(),
         password: _passController.text.trim(),
       );
+
+      final user = auth.currentUser;
+      if (user != null) {
+        await _accountStore.upsertAccount(
+          SavedAccount(
+            uid: user.uid,
+            identifier: _idController.text.trim(),
+            email: user.email,
+            displayName: user.displayName,
+          ),
+          password: _passController.text.trim(), // stored securely
+        );
+      }
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 }

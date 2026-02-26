@@ -318,53 +318,94 @@ class HomeSheets {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // ✅ important
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.account_balance_wallet_rounded, size: 35),
-              const SizedBox(height: 10),
-              Text(
-                "Set Budget Amount",
-                style: Theme.of(context).textTheme.titleMedium,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final text = Theme.of(ctx).textTheme;
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => FocusScope.of(ctx).unfocus(), // ✅ dismiss keyboard
+          child: SafeArea(
+            child: Padding(
+              // ✅ push content above keyboard
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: "Enter budget amount for this period",
-                  border: OutlineInputBorder(),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.account_balance_wallet_rounded, size: 35),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Set Budget Amount",
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller: controller,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
+                      decoration: const InputDecoration(
+                        labelText: "Enter budget amount for this period",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: cs.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.save_rounded),
+                        label: const Text(
+                          "Save budget",
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          final value =
+                              double.tryParse(controller.text.trim()) ?? 0;
+                          if (value > 0) {
+                            provider.setMonthlyBudget(value);
+                            Navigator.pop(ctx);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Please enter a valid amount"),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.save_rounded),
-                label: const Text("Save budget"),
-                onPressed: () {
-                  final value = double.tryParse(controller.text.trim()) ?? 0;
-                  if (value > 0) {
-                    provider.setMonthlyBudget(value);
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
+            ),
           ),
         );
       },
@@ -548,10 +589,16 @@ class HomeSheets {
                                 Navigator.pop(ctx);
                               }
                             },
-                            icon: const Icon(Icons.add_rounded),
+                            icon: const Icon(
+                              Icons.add_rounded,
+                              color: Colors.white,
+                            ),
                             label: const Text(
                               "Add to this date",
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),

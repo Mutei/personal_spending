@@ -3,11 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/other_spending_provider.dart';
-import '../widgets/home/home/home_section_card.dart';
 import '../widgets/home/other/other_category_card.dart';
 import '../widgets/home/other/other_loading_widget.dart';
 import '../widgets/home/other/other_overall_total_card.dart';
 import '../widgets/home/other/other_spending_sheets.dart';
+import '../widgets/home/other/other_expandable_section_card.dart';
 
 class OtherSpendingScreen extends StatefulWidget {
   const OtherSpendingScreen({super.key});
@@ -27,7 +27,7 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
 
   Future<void> _loadDataOnce() async {
     final provider = context.read<OtherSpendingProvider>();
-    if (provider.entries.isEmpty) {
+    if (!provider.hasLoaded) {
       await provider.loadData();
     }
   }
@@ -35,7 +35,6 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<OtherSpendingProvider>();
-    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final fmt = DateFormat('yyyy-MM-dd');
 
@@ -45,7 +44,7 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             appBar: AppBar(title: const Text('Other spendings')),
-            body: OtherLoadingWidget(),
+            body: const OtherLoadingWidget(),
           );
         }
 
@@ -80,12 +79,25 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              // ------------ TOP CARD (filters + total) ------------
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: HomeSectionCard(
+
+          // ✅ ONE scrollable parent so expansions never overflow
+          body: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              // extra space so content won't be hidden behind FAB / bottom nav
+              bottom: 110 + MediaQuery.of(context).padding.bottom,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ------------ TOP CARD (filters + total) ------------
+                OtherExpandableSectionCard(
+                  title: "Filters & total",
+                  subtitle: "Choose a period",
+                  leadingIcon: Icons.filter_alt_outlined,
+                  initiallyExpanded: true,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -105,6 +117,7 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 8,
                         children: [
                           FilterChip(
                             label: const Text("All"),
@@ -144,94 +157,106 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
                     ],
                   ),
                 ),
-              ),
 
-              // ------------ CATEGORY BREAKDOWN (summary) ------------
-              if (categoryTotals.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: HomeSectionCard(
-                    padding: const EdgeInsets.all(14),
+                const SizedBox(height: 12),
+
+                // ------------ CATEGORY BREAKDOWN (summary) ------------
+                if (categoryTotals.isNotEmpty)
+                  OtherExpandableSectionCard(
+                    title: "By category",
+                    subtitle: "Tap to expand / collapse",
+                    badgeText: "${categoryTotals.length}",
+                    leadingIcon: Icons.category_outlined,
+                    initiallyExpanded: false,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "By category",
-                          style: text.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                      children: categoryTotals.entries.map((e) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  e.key,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                e.value.toStringAsFixed(2),
+                                style: text.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        ...categoryTotals.entries.map(
-                          (e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(child: Text(e.key)),
-                                Text(e.value.toStringAsFixed(2)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                        );
+                      }).toList(),
                     ),
                   ),
-                ),
 
-              const SizedBox(height: 10),
+                const SizedBox(height: 12),
 
-              // ------------ GROUPED, PRINT-FRIENDLY LIST ------------
-              Expanded(
-                child: groupedByCategory.isEmpty
-                    ? const Center(child: Text("No other spendings yet."))
-                    : ListView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        children: [
-                          OtherOverallTotalCard(total: overallTotal),
-                          const SizedBox(height: 8),
-                          ...groupedByCategory.entries.map(
-                            (entry) => OtherCategoryCard(
-                              category: entry.key,
-                              entries: entry.value,
-                              fmt: fmt,
-                              onDeleteCategory: () async {
-                                final confirm =
-                                    await OtherSpendingSheets.confirmDeleteDialog(
-                                      context,
-                                      message:
-                                          'Delete all entries under "${entry.key}"? This cannot be undone.',
-                                    );
-                                if (confirm == true) {
-                                  await provider.removeCategory(entry.key);
-                                }
-                              },
-                              onEditEntry: (e) {
-                                OtherSpendingSheets.showAddOrEditDialog(
+                // ------------ OVERALL TOTAL CARD ------------
+                OtherOverallTotalCard(total: overallTotal),
+
+                const SizedBox(height: 10),
+
+                // ------------ GROUPED, PRINT-FRIENDLY LIST ------------
+                if (groupedByCategory.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: Text("No other spendings yet.")),
+                  )
+                else
+                  // ✅ this ListView is inside SingleChildScrollView, so make it non-scrollable
+                  ListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      ...groupedByCategory.entries.map(
+                        (entry) => OtherCategoryCard(
+                          category: entry.key,
+                          entries: entry.value,
+                          fmt: fmt,
+                          onDeleteCategory: () async {
+                            final confirm =
+                                await OtherSpendingSheets.confirmDeleteDialog(
                                   context,
-                                  provider,
-                                  entry: e,
+                                  message:
+                                      'Delete all entries under "${entry.key}"? This cannot be undone.',
                                 );
-                              },
-                              onDeleteEntry: (e) async {
-                                final shouldDelete =
-                                    await OtherSpendingSheets.confirmDeleteDialog(
-                                      context,
-                                    );
-                                if (shouldDelete == true) {
-                                  await provider.removeEntry(e);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
+                            if (confirm == true) {
+                              await provider.removeCategory(entry.key);
+                            }
+                          },
+                          onEditEntry: (e) {
+                            OtherSpendingSheets.showAddOrEditDialog(
+                              context,
+                              provider,
+                              entry: e,
+                            );
+                          },
+                          onDeleteEntry: (e) async {
+                            final shouldDelete =
+                                await OtherSpendingSheets.confirmDeleteDialog(
+                                  context,
+                                );
+                            if (shouldDelete == true) {
+                              await provider.removeEntry(e);
+                            }
+                          },
+                        ),
                       ),
-              ),
-            ],
+                    ],
+                  ),
+              ],
+            ),
           ),
+
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               OtherSpendingSheets.showAddOrEditDialog(context, provider);
