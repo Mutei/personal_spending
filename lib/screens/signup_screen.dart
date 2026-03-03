@@ -17,6 +17,14 @@ class _SignupScreenState extends State<SignupScreen> {
   String? _error;
 
   @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
@@ -174,8 +182,9 @@ class _SignupScreenState extends State<SignupScreen> {
         password: password,
         username: username,
       );
-      if (mounted)
+      if (mounted) {
         Navigator.pop(context); // back to login, authGate will push home
+      }
     } catch (e) {
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');

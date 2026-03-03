@@ -24,6 +24,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  // ✅ prevent calling attachUser repeatedly from build()
+  String? _lastUid;
+
+  DateTime _selectedDate = DateTime.now();
+  final _dateFormat = DateFormat('yyyy-MM-dd');
+
   @override
   void initState() {
     super.initState();
@@ -35,11 +41,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // ✅ Attach SpendingProvider once per uid change
+    final uid = context.read<AuthService>().currentUser?.uid;
+    if (uid != _lastUid) {
+      _lastUid = uid;
+      context.read<SpendingProvider>().attachUser(uid);
+    }
+
+    // ✅ Auto-process recurring payments (safe to call; provider should guard internally)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SpendingProvider>().processRecurringForToday();
+    });
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
@@ -48,21 +72,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  DateTime _selectedDate = DateTime.now();
-  final _dateFormat = DateFormat('yyyy-MM-dd');
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SpendingProvider>();
     final auth = context.watch<AuthService>();
-
-    // 👇 Load/save from Firestore for this user
-    provider.attachUser(auth.currentUser?.uid);
-
-    // 👇 Auto-process recurring payments (only once per day internally)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      provider.processRecurringForToday();
-    });
 
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
@@ -163,7 +176,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onLogout: () async {
           Navigator.pop(context);
           context.read<AppLockService>().lockAgain(); // ✅ reset
-          await context.read<AuthService>().signOut();
+          await context
+              .read<AuthService>()
+              .signOut(); // ✅ token removed in signOut
         },
       ),
 

@@ -61,9 +61,7 @@ class FirestoreService {
     DateTime? periodStart,
     DateTime? periodEnd,
   }) async {
-    final data = <String, dynamic>{
-      'monthlyBudget': monthlyBudget,
-    };
+    final data = <String, dynamic>{'monthlyBudget': monthlyBudget};
 
     if (monthlySpendingTarget != null) {
       data['monthlySpendingTarget'] = monthlySpendingTarget;
@@ -77,7 +75,6 @@ class FirestoreService {
 
     await usersCol.doc(uid).set(data, SetOptions(merge: true));
   }
-
 
   /// read user meta
   Future<Map<String, dynamic>?> getUserMeta(String uid) async {
@@ -176,7 +173,6 @@ class FirestoreService {
     final entryRef = otherSpendings(
       uid,
     ).doc(dayId).collection('entries').doc(entryId);
-
     await entryRef.update(data);
   }
 
@@ -189,7 +185,6 @@ class FirestoreService {
     final entryRef = otherSpendings(
       uid,
     ).doc(dayId).collection('entries').doc(entryId);
-
     await entryRef.delete();
   }
 
@@ -199,5 +194,49 @@ class FirestoreService {
   getOtherSpendingDays(String uid) async {
     final snap = await otherSpendings(uid).get();
     return snap.docs;
+  }
+
+  // ------------------------------------------------------------
+  // ✅ FCM TOKENS (NEW)
+  // users/{uid}/fcm_tokens/{token}
+  // ------------------------------------------------------------
+
+  // users/{uid}/fcm_tokens/{token}
+  CollectionReference<Map<String, dynamic>> fcmTokensCol(String uid) =>
+      userDoc(uid).collection('fcm_tokens');
+
+  Future<void> saveFcmToken({
+    required String uid,
+    required String token,
+    required String platform,
+    String? deviceId,
+    String? appVersion,
+  }) async {
+    final ref = fcmTokensCol(uid).doc(token);
+
+    await ref.set({
+      'token': token,
+      'platform': platform,
+      'deviceId': deviceId,
+      'appVersion': appVersion,
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> touchFcmToken({
+    required String uid,
+    required String token,
+  }) async {
+    await fcmTokensCol(uid).doc(token).set({
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteFcmToken({
+    required String uid,
+    required String token,
+  }) async {
+    await fcmTokensCol(uid).doc(token).delete();
   }
 }
