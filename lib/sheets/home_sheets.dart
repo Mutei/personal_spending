@@ -318,7 +318,7 @@ class HomeSheets {
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // ✅ important
+      isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -329,10 +329,9 @@ class HomeSheets {
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => FocusScope.of(ctx).unfocus(), // ✅ dismiss keyboard
+          onTap: () => FocusScope.of(ctx).unfocus(),
           child: SafeArea(
             child: Padding(
-              // ✅ push content above keyboard
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
@@ -352,7 +351,6 @@ class HomeSheets {
                       ),
                     ),
                     const SizedBox(height: 20),
-
                     TextField(
                       controller: controller,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -365,9 +363,7 @@ class HomeSheets {
                         border: OutlineInputBorder(),
                       ),
                     ),
-
                     const SizedBox(height: 20),
-
                     SizedBox(
                       width: double.infinity,
                       height: 50,
@@ -400,7 +396,6 @@ class HomeSheets {
                         },
                       ),
                     ),
-
                     const SizedBox(height: 10),
                   ],
                 ),
@@ -424,6 +419,7 @@ class HomeSheets {
     final bankController = TextEditingController();
     final qtyController = TextEditingController();
     final categoryController = TextEditingController();
+
     DateTime selectedDate = initialDate;
     final dateFormat = DateFormat('yyyy-MM-dd');
 
@@ -438,6 +434,10 @@ class HomeSheets {
         return StatefulBuilder(
           builder: (ctx, sheetSetState) {
             final currentForDate = provider.getSpendingForDate(selectedDate);
+
+            // ✅ IMPORTANT: options must be read INSIDE builder so it updates
+            // after you add new categories.
+            final allCategories = provider.getAllUsedCategories();
 
             return Padding(
               padding: EdgeInsets.only(
@@ -501,6 +501,122 @@ class HomeSheets {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue te) {
+                        final q = te.text.trim().toLowerCase();
+                        if (q.isEmpty) return const Iterable<String>.empty();
+
+                        // startsWith first, then contains
+                        final starts = allCategories.where(
+                          (c) => c.toLowerCase().startsWith(q),
+                        );
+                        final contains = allCategories.where(
+                          (c) =>
+                              !c.toLowerCase().startsWith(q) &&
+                              c.toLowerCase().contains(q),
+                        );
+
+                        return [...starts, ...contains].take(8);
+                      },
+                      displayStringForOption: (opt) => opt,
+                      onSelected: (selection) {
+                        categoryController.text = selection;
+                        categoryController
+                            .selection = TextSelection.fromPosition(
+                          TextPosition(offset: categoryController.text.length),
+                        );
+                      },
+                      fieldViewBuilder:
+                          (context, textController, focusNode, onSubmit) {
+                            // keep your controller as the single source of truth
+                            if (textController.text !=
+                                categoryController.text) {
+                              textController.text = categoryController.text;
+                              textController.selection =
+                                  categoryController.selection;
+                            }
+
+                            textController.addListener(() {
+                              if (categoryController.text !=
+                                  textController.text) {
+                                categoryController.text = textController.text;
+                                categoryController.selection =
+                                    textController.selection;
+                              }
+                            });
+
+                            return TextField(
+                              controller: textController,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(
+                                labelText: "Category (optional)",
+                                hintText: "Start typing…",
+                                border: OutlineInputBorder(),
+                              ),
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => onSubmit(),
+                            );
+                          },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        final cs = Theme.of(context).colorScheme;
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(12),
+                            color: cs.surface,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxHeight: 220,
+                                maxWidth: 500,
+                              ),
+                              child: ListView.separated(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: cs.outlineVariant.withOpacity(0.35),
+                                ),
+                                itemBuilder: (context, index) {
+                                  final opt = options.elementAt(index);
+                                  return InkWell(
+                                    onTap: () => onSelected(opt),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.search_rounded,
+                                            size: 18,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              opt,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
 
                     TextField(
                       controller: amountController,
@@ -512,6 +628,7 @@ class HomeSheets {
                       ),
                     ),
                     const SizedBox(height: 12),
+
                     TextField(
                       controller: itemController,
                       decoration: const InputDecoration(
@@ -520,6 +637,7 @@ class HomeSheets {
                       ),
                     ),
                     const SizedBox(height: 12),
+
                     TextField(
                       controller: bankController,
                       decoration: const InputDecoration(
@@ -528,22 +646,18 @@ class HomeSheets {
                       ),
                     ),
                     const SizedBox(height: 12),
+
+                    // ✅ Quantity (empty => 1, 0 not allowed) – you said this works
                     TextField(
                       controller: qtyController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: "Quantity (optional)",
+                        labelText: "Quantity (optional) — default 1",
                         border: OutlineInputBorder(),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: "Category (optional)",
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+
+                    // ✅ Category AUTOCOMPLETE (YouTube-like suggestions)
                     const SizedBox(height: 20),
 
                     Row(
@@ -567,6 +681,10 @@ class HomeSheets {
                                   ) ??
                                   0;
                               if (amount > 0) {
+                                final int qty =
+                                    int.tryParse(qtyController.text.trim()) ??
+                                    1;
+
                                 provider.addSpendingForDate(
                                   selectedDate,
                                   amount,
@@ -577,9 +695,7 @@ class HomeSheets {
                                   bank: bankController.text.trim().isEmpty
                                       ? null
                                       : bankController.text.trim(),
-                                  qty: qtyController.text.trim().isEmpty
-                                      ? null
-                                      : int.tryParse(qtyController.text.trim()),
+                                  qty: qty, // provider will force >= 1
                                   category:
                                       categoryController.text.trim().isEmpty
                                       ? null
@@ -619,6 +735,10 @@ class HomeSheets {
                                   ) ??
                                   0;
                               if (amount >= 0) {
+                                final int qty =
+                                    int.tryParse(qtyController.text.trim()) ??
+                                    1;
+
                                 provider.addSpendingForDate(
                                   selectedDate,
                                   amount,
@@ -629,9 +749,7 @@ class HomeSheets {
                                   bank: bankController.text.trim().isEmpty
                                       ? null
                                       : bankController.text.trim(),
-                                  qty: qtyController.text.trim().isEmpty
-                                      ? null
-                                      : int.tryParse(qtyController.text.trim()),
+                                  qty: qty, // provider will force >= 1
                                   category:
                                       categoryController.text.trim().isEmpty
                                       ? null
@@ -900,9 +1018,7 @@ class HomeSheets {
                       const SizedBox(height: 8),
                       ...list.map((p) {
                         final due = provider.getNextDueDate(p);
-                        final dueStr = DateFormat(
-                          'MMM d',
-                        ).format(due); // e.g. Nov 1
+                        final dueStr = DateFormat('MMM d').format(due);
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
@@ -1171,11 +1287,13 @@ class HomeSheets {
                       controller: qtyController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: "Quantity (optional)",
+                        labelText: "Quantity (optional) — default 1",
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
+
+                    // (You can also make category autocomplete here later if you want)
                     TextField(
                       controller: categoryController,
                       decoration: const InputDecoration(
@@ -1183,6 +1301,7 @@ class HomeSheets {
                         border: OutlineInputBorder(),
                       ),
                     ),
+
                     const SizedBox(height: 20),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
@@ -1197,8 +1316,9 @@ class HomeSheets {
                         final amount =
                             double.tryParse(amountController.text.trim()) ?? 0;
                         final qty = qtyController.text.trim().isEmpty
-                            ? null
-                            : int.tryParse(qtyController.text.trim());
+                            ? 1
+                            : int.tryParse(qtyController.text.trim()) ?? 1;
+
                         if (amount >= 0) {
                           provider.updateEntryForDate(
                             date: selectedDate,
@@ -1210,7 +1330,7 @@ class HomeSheets {
                             bank: bankController.text.trim().isEmpty
                                 ? null
                                 : bankController.text.trim(),
-                            qty: qty,
+                            qty: qty, // provider will force >= 1 anyway
                             category: categoryController.text.trim().isEmpty
                                 ? null
                                 : categoryController.text.trim(),

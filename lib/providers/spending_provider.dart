@@ -172,6 +172,39 @@ class SpendingProvider extends ChangeNotifier {
     return trimmed;
   }
 
+  // ✅ quantity rule: empty/null/0/not valid => 1 (never 0)
+  int _effectiveQty(int? qty) {
+    if (qty == null) return 1;
+    if (qty <= 0) return 1;
+    return qty;
+  }
+
+  /// ✅ For category autocomplete (YouTube-like suggestions)
+  /// Returns unique previously used category labels (canonical), sorted.
+  List<String> getAllUsedCategories() {
+    final set = <String>{};
+
+    // from canonical map
+    for (final v in _categoryCanon.values) {
+      final t = v.trim();
+      if (t.isNotEmpty) set.add(t);
+    }
+
+    // from entries (in case canon map is empty)
+    for (final entries in _dailyEntries.values) {
+      for (final e in entries) {
+        final c = e.category;
+        if (c != null && c.trim().isNotEmpty) {
+          set.add(c.trim());
+        }
+      }
+    }
+
+    final list = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
+
   double get monthlyBudget => _monthlyBudget;
   double get todayTotal => _todayTotal;
   double get periodTotal => _periodTotal;
@@ -231,7 +264,7 @@ class SpendingProvider extends ChangeNotifier {
               amount: entry.amount,
               item: entry.item,
               bank: entry.bank,
-              qty: entry.qty,
+              qty: entry.qty != null ? _effectiveQty(entry.qty) : 1,
               category: _canonicalizeCategory(entry.category),
             );
           }).toList();
@@ -373,7 +406,7 @@ class SpendingProvider extends ChangeNotifier {
             amount: entry.amount,
             item: entry.item,
             bank: entry.bank,
-            qty: entry.qty,
+            qty: entry.qty != null ? _effectiveQty(entry.qty) : 1,
             category: _canonicalizeCategory(entry.category),
           );
         }).toList();
@@ -467,10 +500,10 @@ class SpendingProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final dateKey = _dateKey(date);
 
-    // multiply by quantity if provided
-    final double totalAmount = (qty != null && qty > 0)
-        ? (amount * qty)
-        : amount;
+    final int finalQty = _effectiveQty(qty);
+
+    // multiply by quantity (always at least 1)
+    final double totalAmount = amount * finalQty;
 
     final normalizedCategory = _canonicalizeCategory(category);
 
@@ -480,7 +513,7 @@ class SpendingProvider extends ChangeNotifier {
           amount: totalAmount,
           item: item,
           bank: bank,
-          qty: qty,
+          qty: finalQty,
           category: normalizedCategory,
         ),
       ];
@@ -493,7 +526,7 @@ class SpendingProvider extends ChangeNotifier {
           amount: totalAmount,
           item: item,
           bank: bank,
-          qty: qty,
+          qty: finalQty,
           category: normalizedCategory,
         ),
       );
@@ -643,6 +676,7 @@ class SpendingProvider extends ChangeNotifier {
           item: p.title,
           bank: p.bank,
           category: p.category, // already canonical
+          qty: 1, // ✅ always valid
         );
       }
     }
@@ -668,9 +702,9 @@ class SpendingProvider extends ChangeNotifier {
     final list = _dailyEntries[dateKey];
     if (list == null || index < 0 || index >= list.length) return;
 
-    final double totalAmount = (qty != null && qty > 0)
-        ? (amount * qty)
-        : amount;
+    final int finalQty = _effectiveQty(qty);
+
+    final double totalAmount = amount * finalQty;
 
     final normalizedCategory = _canonicalizeCategory(
       category ?? list[index].category,
@@ -680,7 +714,7 @@ class SpendingProvider extends ChangeNotifier {
       amount: totalAmount,
       item: item,
       bank: bank,
-      qty: qty,
+      qty: finalQty,
       category: normalizedCategory,
     );
 
@@ -956,8 +990,7 @@ class SpendingProvider extends ChangeNotifier {
         periodEndDateOnly.difference(periodStartDateOnly).inDays + 1;
 
     // days elapsed so far in period
-    final elapsedDays =
-        lastSoFar.difference(periodStartDateOnly).inDays + 1; // >= 1
+    final elapsedDays = lastSoFar.difference(periodStartDateOnly).inDays + 1;
 
     if (elapsedDays <= 0) return _periodTotal;
 
@@ -1132,7 +1165,7 @@ class SpendingProvider extends ChangeNotifier {
     final uid = _userId!;
 
     final prefs = await SharedPreferences.getInstance();
-    await _saveMetaLocal(); // make sure _saveMetaLocal() also uses uid-scoped keys
+    await _saveMetaLocal();
 
     // save all spending days
     for (final entry in _dailyEntries.entries) {
@@ -1161,9 +1194,7 @@ class SpendingProvider extends ChangeNotifier {
     }
 
     // save recurring
-    await _saveRecurringLocal(
-      prefs,
-    ); // this must also use _p(uid, 'recurringPayments')
+    await _saveRecurringLocal(prefs);
   }
 
   Future<void> _saveRecurringLocal(SharedPreferences prefs) async {
