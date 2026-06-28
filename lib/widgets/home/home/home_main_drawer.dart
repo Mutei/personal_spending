@@ -6,7 +6,8 @@ class HomeMainDrawer extends StatelessWidget {
   final VoidCallback onOpenInsights;
   final VoidCallback onExport;
   final VoidCallback onSendDailySummary;
-  final VoidCallback onSetBudget;
+  final VoidCallback onNotificationPreferences;
+  final Future<void> Function() onSetBudget;
   final VoidCallback onManageRecurring;
   final VoidCallback onLogout;
   final VoidCallback onToggleAppLock;
@@ -19,6 +20,7 @@ class HomeMainDrawer extends StatelessWidget {
     required this.onOpenInsights,
     required this.onExport,
     required this.onSendDailySummary,
+    required this.onNotificationPreferences,
     required this.onSetBudget,
     required this.onManageRecurring,
     required this.onLogout,
@@ -79,7 +81,7 @@ class HomeMainDrawer extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodySmall?.copyWith(
-                          color: cs.onPrimary.withOpacity(0.8),
+                          color: cs.onPrimary.withValues(alpha: 0.8),
                         ),
                       ),
                     ],
@@ -114,12 +116,20 @@ class HomeMainDrawer extends StatelessWidget {
                   onTap: onSendDailySummary,
                 ),
                 ListTile(
+                  leading: const Icon(Icons.tune_rounded),
+                  title: const Text('Notification preferences'),
+                  subtitle: const Text('Daily summary and financial context'),
+                  onTap: onNotificationPreferences,
+                ),
+                ListTile(
                   leading: const Icon(Icons.edit_rounded),
                   title: const Text('Set budget'),
                   subtitle: const Text(
-                    'Update the budget for the current period',
+                    'Update budget and bank account balances',
                   ),
-                  onTap: onSetBudget,
+                  onTap: () {
+                    onSetBudget();
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.event_repeat_rounded),

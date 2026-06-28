@@ -176,18 +176,7 @@ class OtherSpendingProvider extends ChangeNotifier {
   /// Two entries are considered the same if:
   ///  - title, amount, date, bank, qty, category are the same.
   List<OtherSpendingEntry> get uniqueEntries {
-    final filtered = _applyFilter(_entries);
-    final Map<String, OtherSpendingEntry> map = {};
-
-    for (final e in filtered) {
-      final key =
-          '${e.title ?? ''}|${e.amount}|${e.date.toIso8601String()}|${e.bank ?? ''}|${e.qty ?? ''}|${(e.category ?? '').trim()}';
-      map[key] = e; // last wins
-    }
-
-    final list = map.values.toList();
-    list.sort((a, b) => b.date.compareTo(a.date));
-    return list;
+    return _dedupeEntries(_applyFilter(_entries));
   }
 
   /// Total using **de-duplicated** entries
@@ -208,6 +197,32 @@ class OtherSpendingProvider extends ChangeNotifier {
   }
 
   bool get hasCustomFilter => _filterStart != null && _filterEnd != null;
+
+  List<OtherSpendingEntry> getUniqueEntriesForDate(DateTime date) {
+    final target = DateTime(date.year, date.month, date.day);
+    final entriesForDate = _entries.where((entry) {
+      final day = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      return day == target;
+    }).toList();
+    return _dedupeEntries(entriesForDate);
+  }
+
+  double getUniqueTotalForDate(DateTime date) {
+    return getUniqueEntriesForDate(
+      date,
+    ).fold(0.0, (sum, entry) => sum + entry.amount);
+  }
+
+  List<DateTime> getRecordedDates() {
+    final uniqueDates = <DateTime>{};
+    for (final entry in _entries) {
+      uniqueDates.add(
+        DateTime(entry.date.year, entry.date.month, entry.date.day),
+      );
+    }
+    final dates = uniqueDates.toList()..sort((a, b) => b.compareTo(a));
+    return dates;
+  }
 
   // ------------------------------------------------------------
   // LOAD FROM FIRESTORE (FAST + SMOOTH)
@@ -417,5 +432,18 @@ class OtherSpendingProvider extends ChangeNotifier {
       final d = DateTime(e.date.year, e.date.month, e.date.day);
       return !d.isBefore(_filterStart!) && !d.isAfter(_filterEnd!);
     }).toList();
+  }
+
+  List<OtherSpendingEntry> _dedupeEntries(List<OtherSpendingEntry> source) {
+    final map = <String, OtherSpendingEntry>{};
+
+    for (final entry in source) {
+      final key =
+          '${entry.title ?? ''}|${entry.amount}|${entry.date.toIso8601String()}|${entry.bank ?? ''}|${entry.qty ?? ''}|${(entry.category ?? '').trim()}';
+      map[key] = entry;
+    }
+
+    final list = map.values.toList()..sort((a, b) => b.date.compareTo(a.date));
+    return list;
   }
 }

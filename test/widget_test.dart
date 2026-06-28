@@ -1,30 +1,36 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:personal_spendings/main.dart';
+import 'package:personal_spendings/providers/spending_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('spending mutations keep linked bank balances in sync', () async {
+    SharedPreferences.setMockInitialValues({});
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final provider = SpendingProvider();
+    const account = BankAccount(id: 'bank_1', name: 'Main Bank', balance: 1000);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await provider.setBankAccounts([account]);
+    await provider.addSpendingForDate(
+      DateTime(2026, 5, 18),
+      100,
+      bank: account.name,
+      bankAccountId: account.id,
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(provider.getBankAccountById(account.id)?.balance, 900);
+
+    await provider.updateEntryForDate(
+      date: DateTime(2026, 5, 18),
+      index: 0,
+      amount: 150,
+      bank: account.name,
+      bankAccountId: account.id,
+    );
+
+    expect(provider.getBankAccountById(account.id)?.balance, 850);
+
+    await provider.removeEntryForDate(date: DateTime(2026, 5, 18), index: 0);
+
+    expect(provider.getBankAccountById(account.id)?.balance, 1000);
   });
 }

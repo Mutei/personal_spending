@@ -60,6 +60,8 @@ class FirestoreService {
     double? monthlySpendingTarget,
     DateTime? periodStart,
     DateTime? periodEnd,
+    List<Map<String, dynamic>>? bankAccounts,
+    Map<String, dynamic>? notificationPreferences,
   }) async {
     final data = <String, dynamic>{'monthlyBudget': monthlyBudget};
 
@@ -71,6 +73,12 @@ class FirestoreService {
     }
     if (periodEnd != null) {
       data['periodEnd'] = periodEnd.toIso8601String();
+    }
+    if (bankAccounts != null) {
+      data['bankAccounts'] = bankAccounts;
+    }
+    if (notificationPreferences != null) {
+      data['notificationPreferences'] = notificationPreferences;
     }
 
     await usersCol.doc(uid).set(data, SetOptions(merge: true));

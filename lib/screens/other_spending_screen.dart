@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/notification_center_provider.dart';
 import '../providers/other_spending_provider.dart';
+import '../providers/spending_provider.dart';
 import '../widgets/home/other/other_category_card.dart';
 import '../widgets/home/other/other_loading_widget.dart';
 import '../widgets/home/other/other_overall_total_card.dart';
 import '../widgets/home/other/other_spending_sheets.dart';
 import '../widgets/home/other/other_expandable_section_card.dart';
+import '../widgets/home/home/notification_center_button.dart';
 
 class OtherSpendingScreen extends StatefulWidget {
   const OtherSpendingScreen({super.key});
@@ -35,8 +38,17 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<OtherSpendingProvider>();
+    final spendingProvider = context.watch<SpendingProvider>();
     final text = Theme.of(context).textTheme;
     final fmt = DateFormat('yyyy-MM-dd');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<NotificationCenterProvider>().syncFromData(
+        spending: spendingProvider,
+        other: provider,
+      );
+    });
 
     return FutureBuilder<void>(
       future: _loadFuture,
@@ -71,6 +83,7 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
           appBar: AppBar(
             title: const Text('Other spendings'),
             actions: [
+              const NotificationCenterButton(),
               IconButton(
                 icon: const Icon(Icons.download_rounded),
                 tooltip: 'Export other spendings',

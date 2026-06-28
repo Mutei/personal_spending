@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/saved_account.dart';
 import '../providers/spending_provider.dart';
 import '../providers/other_spending_provider.dart';
+import '../providers/notification_center_provider.dart';
 import '../services/account_store.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_gate.dart';
@@ -208,6 +209,7 @@ class _RootScreenState extends State<RootScreen> {
       final uid = auth.currentUser?.uid;
       context.read<SpendingProvider>().attachUser(uid);
       context.read<OtherSpendingProvider>().attachUser(uid);
+      context.read<NotificationCenterProvider>().attachUser(uid);
     });
 
     return Scaffold(

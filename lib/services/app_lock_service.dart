@@ -30,29 +30,32 @@ class AppLockService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> authenticate() async {
+  Future<bool> authenticate({
+    String localizedReason = 'Unlock Spending Tracker',
+    bool unlockSession = true,
+  }) async {
     try {
       final isSupported = await _auth.isDeviceSupported();
-      final canBio = await _auth.canCheckBiometrics;
+      final canCheckBiometrics = await _auth.canCheckBiometrics;
 
       debugPrint("AppLock -> isDeviceSupported: $isSupported");
-      debugPrint("AppLock -> canCheckBiometrics: $canBio");
+      debugPrint("AppLock -> canCheckBiometrics: $canCheckBiometrics");
 
       if (!isSupported) {
         debugPrint("AppLock -> Device not supported");
         return false;
       }
 
-      // This will show PIN/pattern if biometrics not available (since biometricOnly=false)
+      // Allow the OS to choose biometrics or the enrolled device credential.
       final success = await _auth.authenticate(
-        localizedReason: 'Unlock Spending Tracker',
+        localizedReason: localizedReason,
         biometricOnly: false,
         // stickyAuth: true,
         // useErrorDialogs: true,
       );
 
       debugPrint("AppLock -> authenticate result: $success");
-      if (success) {
+      if (success && unlockSession) {
         _unlockedThisSession = true;
         notifyListeners();
       }

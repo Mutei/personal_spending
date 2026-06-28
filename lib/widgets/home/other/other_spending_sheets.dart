@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../providers/other_spending_provider.dart';
+import '../../../sheets/home_sheets.dart';
 import '../../../services/export_service.dart';
 
 class OtherSpendingSheets {
@@ -17,7 +18,7 @@ class OtherSpendingSheets {
     final categories = provider.categoryTotals.keys.toList()..sort();
 
     String scope = 'all';
-    String? selectedCategory;
+    final selectedCategories = <String>{};
 
     showModalBottomSheet(
       context: context,
@@ -25,158 +26,243 @@ class OtherSpendingSheets {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      isScrollControlled: false,
+      isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Export other spendings',
-                    style: text.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+            return SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  MediaQuery.of(ctx).viewInsets.bottom + 24,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Export other spendings',
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Choose what to export:', style: text.bodyMedium),
-                  const SizedBox(height: 8),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    value: 'all',
-                    groupValue: scope,
-                    title: const Text('All categories'),
-                    onChanged: (v) {
-                      setState(() => scope = v!);
-                    },
-                  ),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    value: 'category',
-                    groupValue: scope,
-                    title: const Text('Specific category'),
-                    onChanged: (v) {
-                      setState(() => scope = v!);
-                    },
-                  ),
-                  if (scope == 'category')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, left: 16),
-                      child: DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: categories
-                            .map(
-                              (c) => DropdownMenuItem<String>(
-                                value: c,
-                                child: Text(c),
+                    const SizedBox(height: 12),
+                    Text('Choose what to export:', style: text.bodyMedium),
+                    const SizedBox(height: 8),
+                    RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      value: 'all',
+                      groupValue: scope,
+                      title: const Text('All categories'),
+                      onChanged: (v) {
+                        setState(() {
+                          scope = v!;
+                          selectedCategories.clear();
+                        });
+                      },
+                    ),
+                    RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      value: 'category',
+                      groupValue: scope,
+                      title: const Text('Specific category'),
+                      onChanged: (v) {
+                        setState(() => scope = v!);
+                      },
+                    ),
+                    if (scope == 'category')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, left: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text('Categories', style: text.bodyMedium),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: categories.isEmpty
+                                      ? null
+                                      : () {
+                                          setState(() {
+                                            selectedCategories
+                                              ..clear()
+                                              ..addAll(categories);
+                                          });
+                                        },
+                                  child: const Text('Select all'),
+                                ),
+                                TextButton(
+                                  onPressed: selectedCategories.isEmpty
+                                      ? null
+                                      : () {
+                                          setState(selectedCategories.clear);
+                                        },
+                                  child: const Text('Clear all'),
+                                ),
+                              ],
+                            ),
+                            if (categories.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'No categories available to export.',
+                                  style: text.bodySmall,
+                                ),
+                              )
+                            else ...[
+                              Text(
+                                selectedCategories.isEmpty
+                                    ? 'No categories selected'
+                                    : '${selectedCategories.length} selected: ${selectedCategories.join(', ')}',
+                                style: text.bodySmall,
                               ),
-                            )
-                            .toList(),
-                        value: selectedCategory,
-                        onChanged: (v) {
-                          setState(() => selectedCategory = v);
-                        },
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: categories
+                                    .map(
+                                      (category) => FilterChip(
+                                        label: Text(category),
+                                        selected: selectedCategories.contains(
+                                          category,
+                                        ),
+                                        onSelected: (selected) {
+                                          setState(() {
+                                            if (selected) {
+                                              selectedCategories.add(category);
+                                            } else {
+                                              selectedCategories.remove(
+                                                category,
+                                              );
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final filters = scope == 'category'
+                                  ? (selectedCategories.toList()..sort())
+                                  : null;
+                              if (scope == 'category' &&
+                                  (filters == null || filters.isEmpty)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select at least one category first',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              try {
+                                await ExportService.instance
+                                    .exportOtherCsvAndShare(
+                                      provider,
+                                      categoryFilters: filters,
+                                    );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Other spendings exported as CSV',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Export failed: $e'),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.table_view),
+                            label: const Text('CSV'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final filters = scope == 'category'
+                                  ? (selectedCategories.toList()..sort())
+                                  : null;
+                              if (scope == 'category' &&
+                                  (filters == null || filters.isEmpty)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select at least one category first',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              try {
+                                final defaultTitle = filters == null
+                                    ? 'Other Spending Report'
+                                    : filters.length == 1
+                                    ? '${filters.first} Other Spending Report'
+                                    : 'Selected Categories Other Spending Report';
+                                final reportTitle =
+                                    await HomeSheets.promptForReportTitle(
+                                      context,
+                                      initialTitle: defaultTitle,
+                                    );
+                                if (reportTitle == null || !context.mounted) {
+                                  return;
+                                }
+                                await ExportService.instance
+                                    .exportOtherPdfAndShare(
+                                      provider,
+                                      categoryFilters: filters,
+                                      reportTitle: reportTitle,
+                                    );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Other spendings exported as PDF',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Export failed: $e'),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.picture_as_pdf),
+                            label: const Text('PDF'),
+                          ),
+                        ),
+                      ],
                     ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final filter = (scope == 'category')
-                                ? selectedCategory
-                                : null;
-                            if (scope == 'category' && filter == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Please select a category first',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                            try {
-                              await ExportService.instance
-                                  .exportOtherCsvAndShare(
-                                    provider,
-                                    categoryFilter: filter,
-                                  );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Other spendings exported as CSV',
-                                    ),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Export failed: $e')),
-                                );
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.table_view),
-                          label: const Text('CSV'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            final filter = (scope == 'category')
-                                ? selectedCategory
-                                : null;
-                            if (scope == 'category' && filter == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Please select a category first',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                            try {
-                              await ExportService.instance
-                                  .exportOtherPdfAndShare(
-                                    provider,
-                                    categoryFilter: filter,
-                                  );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Other spendings exported as PDF',
-                                    ),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Export failed: $e')),
-                                );
-                              }
-                            }
-                          },
-                          icon: const Icon(Icons.picture_as_pdf),
-                          label: const Text('PDF'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -336,6 +422,7 @@ class OtherSpendingSheets {
                                 final confirm = await confirmDeleteDialog(ctx);
                                 if (confirm == true) {
                                   await provider.removeEntry(entry);
+                                  if (!ctx.mounted) return;
                                   Navigator.pop(ctx);
                                 }
                               },
@@ -381,6 +468,7 @@ class OtherSpendingSheets {
                                   qty: qty,
                                 );
 
+                                if (!ctx.mounted) return;
                                 Navigator.pop(ctx);
                               },
                               icon: const Icon(Icons.save),
@@ -422,6 +510,7 @@ class OtherSpendingSheets {
                             qty: qty,
                           );
 
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                         },
                         icon: const Icon(Icons.save),
