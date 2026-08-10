@@ -7,6 +7,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 
+import '../localization/demo_localization.dart';
+import '../localization/language_constants.dart';
 import '../providers/other_spending_provider.dart';
 import '../providers/spending_provider.dart';
 
@@ -17,6 +19,20 @@ class ExportService {
 
   final DateFormat _dateFmt = DateFormat('yyyy-MM-dd');
   Future<_PdfFonts>? _fontsFuture;
+  String _languageCode = english;
+  static const PdfColor _brandTeal = PdfColor.fromInt(0xFF0F766E);
+  static const PdfColor _brandTealDark = PdfColor.fromInt(0xFF0B5E58);
+  static const PdfColor _brandMint = PdfColor.fromInt(0xFFD6F0EB);
+  static const PdfColor _brandInk = PdfColor.fromInt(0xFF102A43);
+  static const PdfColor _panelBackground = PdfColor.fromInt(0xFFF5FBFA);
+  static const PdfColor _panelBorder = PdfColor.fromInt(0xFFD8EAE7);
+  static const PdfColor _mutedText = PdfColor.fromInt(0xFF5F7177);
+  static const PdfColor _goldAccent = PdfColor.fromInt(0xFFE8B04A);
+
+  Future<void> prepareLocale() async {
+    _languageCode = await getCurrentLanguageCode();
+    await DemoLocalization.loadLanguageMap(_languageCode);
+  }
 
   Future<File> _writeTempTextFile(String filename, String contents) async {
     final dir = await getTemporaryDirectory();
@@ -62,6 +78,14 @@ class ExportService {
   String _formatAmount(double amount) {
     final formatted = NumberFormat('#,##0.00').format(amount);
     return '$formatted SAR';
+  }
+
+  String _tr(String key, [Map<String, String> args = const {}]) {
+    var value = DemoLocalization.translateCached(_languageCode, key);
+    args.forEach((placeholder, replacement) {
+      value = value.replaceAll('{$placeholder}', replacement);
+    });
+    return value;
   }
 
   bool _matchesCategoryFilter(
@@ -134,51 +158,79 @@ class ExportService {
       width: double.infinity,
       padding: const pw.EdgeInsets.all(24),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#0F766E'),
-        borderRadius: pw.BorderRadius.circular(18),
+        gradient: const pw.LinearGradient(
+          colors: [_brandTeal, _brandTealDark],
+          begin: pw.Alignment.topLeft,
+          end: pw.Alignment.bottomRight,
+        ),
+        borderRadius: pw.BorderRadius.circular(22),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.white,
-              borderRadius: pw.BorderRadius.circular(999),
-            ),
-            child: _text(
-              reportType,
-              style: const pw.TextStyle(
-                color: PdfColor.fromInt(0xFF0F766E),
-                fontSize: 11,
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 14),
-          _text(
-            reportTitle,
-            style: pw.TextStyle(
-              color: PdfColors.white,
-              fontSize: 24,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 12),
-          pw.Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _buildMetaPill('Generated', generatedAt),
-              _buildMetaPill(
-                'Categories',
-                _categorySelectionLabel(selectedCategories),
+              pw.Expanded(
+                flex: 3,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.white,
+                        borderRadius: pw.BorderRadius.circular(999),
+                      ),
+                      child: _text(
+                        reportType,
+                        style: const pw.TextStyle(
+                          color: _brandTeal,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(height: 14),
+                    _text(
+                      reportTitle,
+                      style: pw.TextStyle(
+                        color: PdfColors.white,
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 10),
+                    _text(
+                      'A polished analytics summary of the spending records included in this export.',
+                      style: pw.TextStyle(
+                        color: PdfColor.fromInt(0xD9FFFFFF),
+                        fontSize: 10.5,
+                      ),
+                    ),
+                    pw.SizedBox(height: 14),
+                    pw.Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        _buildMetaPill('Generated', generatedAt),
+                        _buildMetaPill(
+                          'Categories',
+                          _categorySelectionLabel(selectedCategories),
+                        ),
+                        if (period != null && period.isNotEmpty)
+                          _buildMetaPill('Period', period),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              if (period != null && period.isNotEmpty)
-                _buildMetaPill('Period', period),
+              pw.SizedBox(width: 16),
+              pw.Expanded(flex: 2, child: _buildTotalSpentBanner(totalSpent)),
             ],
           ),
-          pw.SizedBox(height: 18),
-          _buildTotalSpentBanner(totalSpent),
         ],
       ),
     );
@@ -187,51 +239,64 @@ class ExportService {
   pw.Widget _buildTotalSpentBanner(String totalSpent) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const pw.EdgeInsets.all(18),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromInt(0x26FFFFFF),
-        borderRadius: pw.BorderRadius.circular(16),
-        border: pw.Border.all(color: PdfColor.fromInt(0x40FFFFFF), width: 0.8),
+        color: PdfColor.fromInt(0x24FFFFFF),
+        borderRadius: pw.BorderRadius.circular(18),
+        border: pw.Border.all(color: PdfColor.fromInt(0x40FFFFFF), width: 0.9),
       ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                _text(
-                  'Total Spent',
-                  style: const pw.TextStyle(
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              _text(
+                'Total Spent',
+                style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromInt(0x1AFFFFFF),
+                  borderRadius: pw.BorderRadius.circular(999),
+                ),
+                child: _text(
+                  'SAR',
+                  style: pw.TextStyle(
                     color: PdfColors.white,
+                    fontWeight: pw.FontWeight.bold,
                     fontSize: 11,
                   ),
                 ),
-                pw.SizedBox(height: 4),
-                _text(
-                  totalSpent,
-                  style: pw.TextStyle(
-                    color: PdfColors.white,
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 10),
+          _text(
+            totalSpent,
+            style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 24,
+              fontWeight: pw.FontWeight.bold,
             ),
           ),
+          pw.SizedBox(height: 10),
           pw.Container(
-            padding: const pw.EdgeInsets.all(10),
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: pw.BoxDecoration(
-              color: PdfColor.fromInt(0x1AFFFFFF),
-              borderRadius: pw.BorderRadius.circular(999),
+              color: PdfColor.fromInt(0x18FFFFFF),
+              borderRadius: pw.BorderRadius.circular(12),
             ),
             child: _text(
-              'SAR',
+              'Includes only the transactions visible in this report.',
               style: pw.TextStyle(
-                color: PdfColors.white,
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 12,
+                color: PdfColor.fromInt(0xD9FFFFFF),
+                fontSize: 9.5,
               ),
             ),
           ),
@@ -308,50 +373,84 @@ class ExportService {
     );
   }
 
-  pw.Widget _buildSummarySection(
-    List<_SummaryMetric> metrics, {
-    String title = 'Summary',
+  pw.Widget _buildOverviewPanel({
+    required String title,
+    String? subtitle,
+    required List<pw.Widget> children,
   }) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        _text(
-          title,
-          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 10),
-        pw.Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: metrics.map(_buildMetricCard).toList(),
-        ),
-      ],
-    );
-  }
-
-  pw.Widget _buildMetricCard(_SummaryMetric metric) {
     return pw.Container(
-      width: 160,
-      padding: const pw.EdgeInsets.all(14),
+      padding: const pw.EdgeInsets.all(18),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#F3F7F7'),
-        border: pw.Border.all(color: PdfColor.fromHex('#D4E4E4')),
-        borderRadius: pw.BorderRadius.circular(12),
+        color: PdfColors.white,
+        border: pw.Border.all(color: _panelBorder, width: 0.9),
+        borderRadius: pw.BorderRadius.circular(20),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           _text(
-            metric.label,
+            title,
             style: pw.TextStyle(
-              fontSize: 10,
-              color: PdfColor.fromHex('#5C7272'),
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: _brandInk,
             ),
+          ),
+          if (subtitle != null) ...[
+            pw.SizedBox(height: 5),
+            _text(
+              subtitle,
+              style: pw.TextStyle(fontSize: 10, color: _mutedText),
+            ),
+          ],
+          pw.SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildCoverSummarySection(List<_SummaryMetric> metrics) {
+    return pw.Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: metrics.map(_buildMetricCard).toList(),
+    );
+  }
+
+  pw.Widget _buildMetricCard(_SummaryMetric metric) {
+    return pw.Container(
+      width: 165,
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        border: pw.Border.all(color: _panelBorder),
+        borderRadius: pw.BorderRadius.circular(16),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Container(
+            width: 28,
+            height: 4,
+            decoration: pw.BoxDecoration(
+              color: _brandTeal,
+              borderRadius: pw.BorderRadius.circular(999),
+            ),
+          ),
+          pw.SizedBox(height: 12),
+          _text(
+            metric.label,
+            style: pw.TextStyle(fontSize: 10, color: _mutedText),
           ),
           pw.SizedBox(height: 8),
           _text(
             metric.value,
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(
+              fontSize: 17,
+              fontWeight: pw.FontWeight.bold,
+              color: _brandInk,
+            ),
           ),
         ],
       ),
@@ -393,8 +492,10 @@ class ExportService {
     }
 
     pw.Widget buildCell(String value, {required bool header}) {
-      final textColor = header ? PdfColors.white : PdfColor.fromHex('#1E293B');
-      final background = header ? PdfColor.fromHex('#0F766E') : PdfColors.white;
+      final textColor = header ? PdfColors.white : _brandInk;
+      final background = header
+          ? _brandTeal
+          : const PdfColor.fromInt(0x00FFFFFF);
       return pw.Container(
         padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         color: background,
@@ -431,13 +532,946 @@ class ExportService {
       );
     }
 
-    return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColor.fromHex('#D7E3E3'),
-        width: 0.6,
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(16),
+        border: pw.Border.all(color: _panelBorder, width: 0.8),
       ),
-      columnWidths: widths,
-      children: tableRows,
+      padding: const pw.EdgeInsets.all(8),
+      child: pw.Table(
+        border: pw.TableBorder.all(
+          color: PdfColor.fromHex('#D7E3E3'),
+          width: 0.6,
+        ),
+        columnWidths: widths,
+        children: tableRows,
+      ),
+    );
+  }
+
+  pw.Widget _buildDataPanel({
+    required String title,
+    String? subtitle,
+    required pw.Widget child,
+  }) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        color: _panelBackground,
+        borderRadius: pw.BorderRadius.circular(18),
+        border: pw.Border.all(color: _panelBorder),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle(title, subtitle: subtitle),
+          pw.SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildCategoryBreakdownSection(
+    List<_CategoryBreakdownItem> items, {
+    required String totalLabel,
+    required double totalAmount,
+  }) {
+    final displayItems = items.take(6).toList();
+
+    return _buildDataPanel(
+      title: 'Category analytics',
+      subtitle:
+          'Visual breakdown of where the selected spending is concentrated.',
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: displayItems.map((item) {
+              final ratio = totalAmount <= 0
+                  ? 0.0
+                  : (item.total / totalAmount).clamp(0.0, 1.0);
+              return pw.Container(
+                width: 245,
+                padding: const pw.EdgeInsets.all(14),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.white,
+                  borderRadius: pw.BorderRadius.circular(16),
+                  border: pw.Border.all(color: _panelBorder),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Container(
+                          width: 28,
+                          height: 28,
+                          decoration: pw.BoxDecoration(
+                            color: item.rank == 1 ? _goldAccent : _brandMint,
+                            borderRadius: pw.BorderRadius.circular(10),
+                          ),
+                          alignment: pw.Alignment.center,
+                          child: _text(
+                            '${item.rank}',
+                            style: pw.TextStyle(
+                              color: item.rank == 1
+                                  ? PdfColors.white
+                                  : _brandTeal,
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(width: 10),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              _text(
+                                item.label,
+                                style: pw.TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: _brandInk,
+                                ),
+                                maxLines: 2,
+                              ),
+                              pw.SizedBox(height: 3),
+                              _text(
+                                _formatAmount(item.total),
+                                style: pw.TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: _brandTeal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        pw.SizedBox(width: 6),
+                        _text(
+                          '${(ratio * 100).toStringAsFixed(0)}%',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: _mutedText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 10),
+                    pw.ClipRRect(
+                      horizontalRadius: 999,
+                      verticalRadius: 999,
+                      child: pw.LinearProgressIndicator(
+                        value: ratio,
+                        minHeight: 7,
+                        backgroundColor: PdfColor.fromHex('#E7F2F0'),
+                        valueColor: _brandTeal,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.white,
+              borderRadius: pw.BorderRadius.circular(14),
+              border: pw.Border.all(color: _panelBorder),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                _text(
+                  totalLabel,
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: _mutedText,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                _text(
+                  _formatAmount(totalAmount),
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    color: _brandInk,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildCompactCategoryHighlights(
+    List<_CategoryBreakdownItem> items, {
+    required double totalAmount,
+  }) {
+    final displayItems = items.take(4).toList();
+
+    return _buildOverviewPanel(
+      title: 'Category spotlight',
+      subtitle: 'Top categories by share of the selected spending total.',
+      children: [
+        pw.Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: displayItems.map((item) {
+            final ratio = totalAmount <= 0
+                ? 0.0
+                : (item.total / totalAmount).clamp(0.0, 1.0);
+            return pw.Container(
+              width: 240,
+              padding: const pw.EdgeInsets.all(14),
+              decoration: pw.BoxDecoration(
+                color: _panelBackground,
+                borderRadius: pw.BorderRadius.circular(16),
+                border: pw.Border.all(color: _panelBorder),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Container(
+                        width: 28,
+                        height: 28,
+                        alignment: pw.Alignment.center,
+                        decoration: pw.BoxDecoration(
+                          color: item.rank == 1 ? _goldAccent : _brandMint,
+                          borderRadius: pw.BorderRadius.circular(9),
+                        ),
+                        child: _text(
+                          '${item.rank}',
+                          style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: item.rank == 1
+                                ? PdfColors.white
+                                : _brandTeal,
+                          ),
+                        ),
+                      ),
+                      pw.SizedBox(width: 10),
+                      pw.Expanded(
+                        child: _text(
+                          item.label,
+                          style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: _brandInk,
+                          ),
+                          maxLines: 2,
+                        ),
+                      ),
+                      pw.SizedBox(width: 8),
+                      _text(
+                        '${(ratio * 100).toStringAsFixed(0)}%',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _mutedText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.SizedBox(height: 10),
+                  _text(
+                    _formatAmount(item.total),
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _brandTeal,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.ClipRRect(
+                    horizontalRadius: 999,
+                    verticalRadius: 999,
+                    child: pw.LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 7,
+                      backgroundColor: PdfColor.fromHex('#E7F2F0'),
+                      valueColor: _brandTeal,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildReportSnapshotPanel({
+    required int transactionCount,
+    required String totalSpent,
+    required String generatedAt,
+    String? period,
+    List<String>? selectedCategories,
+  }) {
+    return _buildOverviewPanel(
+      title: 'Report snapshot',
+      subtitle: 'A quick overview before the detailed ledger.',
+      children: [
+        _buildSnapshotRow('Transactions', '$transactionCount'),
+        pw.SizedBox(height: 10),
+        _buildSnapshotRow('Total spent', totalSpent),
+        pw.SizedBox(height: 10),
+        _buildSnapshotRow(
+          'Category scope',
+          _categorySelectionLabel(selectedCategories),
+        ),
+        if (period != null && period.isNotEmpty) ...[
+          pw.SizedBox(height: 10),
+          _buildSnapshotRow('Period', period),
+        ],
+        pw.SizedBox(height: 10),
+        _buildSnapshotRow('Generated', generatedAt),
+      ],
+    );
+  }
+
+  pw.Widget _buildSnapshotRow(String label, String value) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: pw.BoxDecoration(
+        color: _panelBackground,
+        borderRadius: pw.BorderRadius.circular(14),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: _text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 10,
+                color: _mutedText,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ),
+          pw.SizedBox(width: 12),
+          pw.Expanded(
+            child: _text(
+              value,
+              style: pw.TextStyle(
+                fontSize: 10.5,
+                color: _brandInk,
+                fontWeight: pw.FontWeight.bold,
+              ),
+              align: pw.TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildDetailSectionHeader({
+    required String title,
+    required String subtitle,
+  }) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: pw.BoxDecoration(
+        color: _panelBackground,
+        borderRadius: pw.BorderRadius.circular(18),
+        border: pw.Border.all(color: _panelBorder),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: _brandInk,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          _text(subtitle, style: pw.TextStyle(fontSize: 10, color: _mutedText)),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildCoverPageBackground() {
+    return pw.Container(
+      height: 150,
+      decoration: pw.BoxDecoration(
+        gradient: const pw.LinearGradient(
+          colors: [_brandTeal, _brandTealDark],
+          begin: pw.Alignment.topLeft,
+          end: pw.Alignment.bottomRight,
+        ),
+        borderRadius: pw.BorderRadius.circular(30),
+      ),
+      child: pw.Align(
+        alignment: pw.Alignment.topRight,
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 18, right: 22),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.end,
+            children: [
+              pw.Container(
+                width: 72,
+                height: 72,
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromInt(0x14FFFFFF),
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+              pw.SizedBox(width: 10),
+              pw.Container(
+                width: 34,
+                height: 34,
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromInt(0x18FFFFFF),
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<_SummaryMetric> _buildDisplayMetrics({
+    required String totalSpent,
+    required List<_SummaryMetric> metrics,
+    required int categoryCount,
+  }) {
+    final items = <_SummaryMetric>[
+      _SummaryMetric(label: 'Total Spent', value: totalSpent),
+    ];
+
+    for (final metric in metrics) {
+      if (metric.label.toLowerCase() == 'total spent') continue;
+      items.add(metric);
+    }
+
+    items.add(
+      _SummaryMetric(
+        label: 'Categories',
+        value: categoryCount <= 0 ? 'All' : '$categoryCount',
+      ),
+    );
+
+    final seen = <String>{};
+    final deduped = <_SummaryMetric>[];
+    for (final item in items) {
+      final key = item.label.toLowerCase();
+      if (!seen.add(key)) continue;
+      deduped.add(item);
+    }
+    return deduped.take(4).toList();
+  }
+
+  pw.Widget _buildOptionCHeader({
+    required String reportTitle,
+    required String reportType,
+    required String generatedAt,
+    String? period,
+  }) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(22),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(18),
+        border: pw.Border.all(color: _panelBorder, width: 0.8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                children: [
+                  pw.Container(
+                    width: 34,
+                    height: 34,
+                    decoration: pw.BoxDecoration(
+                      color: _brandTeal,
+                      shape: pw.BoxShape.circle,
+                    ),
+                  ),
+                  pw.SizedBox(width: 10),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      _text(
+                        'Personal',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _brandInk,
+                        ),
+                      ),
+                      _text(
+                        'Spending Tracker',
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _brandInk,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  _text(
+                    'Report Date',
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: _mutedText,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 3),
+                  _text(
+                    generatedAt,
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      color: _brandInk,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 22),
+          _text(
+            reportTitle,
+            style: pw.TextStyle(
+              fontSize: 26,
+              fontWeight: pw.FontWeight.bold,
+              color: _brandInk,
+            ),
+          ),
+          pw.SizedBox(height: 6),
+          _text(
+            period?.isNotEmpty == true ? period! : reportType,
+            style: pw.TextStyle(fontSize: 11, color: _mutedText),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildOptionCSummaryCards(List<_SummaryMetric> metrics) {
+    return pw.Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: metrics
+          .map(
+            (metric) => pw.Container(
+              width: 122,
+              padding: const pw.EdgeInsets.all(14),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.white,
+                borderRadius: pw.BorderRadius.circular(18),
+                border: pw.Border.all(color: _panelBorder, width: 0.8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _text(
+                    metric.label,
+                    style: pw.TextStyle(
+                      fontSize: 9.5,
+                      color: _mutedText,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 10),
+                  _text(
+                    metric.value,
+                    style: pw.TextStyle(
+                      fontSize: 16,
+                      color: _brandInk,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  pw.Widget _buildOptionCSelectedCategories(List<String>? categories) {
+    final values = (categories == null || categories.isEmpty)
+        ? const ['All categories']
+        : categories;
+    final visibleValues = values.take(8).toList();
+    final hiddenCount = values.length - visibleValues.length;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _text(
+          'Selected Categories',
+          style: pw.TextStyle(
+            fontSize: 12,
+            fontWeight: pw.FontWeight.bold,
+            color: _brandInk,
+          ),
+        ),
+        pw.SizedBox(height: 10),
+        pw.Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ...visibleValues
+                .map(
+                  (category) => pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      borderRadius: pw.BorderRadius.circular(999),
+                      border: pw.Border.all(color: _panelBorder, width: 0.8),
+                    ),
+                    child: _text(
+                      category,
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        color: _brandInk,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+            if (hiddenCount > 0)
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F7FAFD'),
+                  borderRadius: pw.BorderRadius.circular(999),
+                  border: pw.Border.all(color: _panelBorder, width: 0.8),
+                ),
+                child: _text(
+                  '+ $hiddenCount more',
+                  style: pw.TextStyle(
+                    fontSize: 9.5,
+                    color: _mutedText,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildSectionCard({
+    required String title,
+    required pw.Widget child,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        borderRadius: pw.BorderRadius.circular(20),
+        border: pw.Border.all(color: _panelBorder, width: 0.8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _text(
+            title,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: _brandInk,
+            ),
+          ),
+          pw.SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  PdfColor _paletteForRank(int rank) {
+    const palette = <PdfColor>[
+      PdfColor.fromInt(0xFF7BC96F),
+      PdfColor.fromInt(0xFF4A90E2),
+      PdfColor.fromInt(0xFF8B6FE8),
+      PdfColor.fromInt(0xFFF5B544),
+      PdfColor.fromInt(0xFF56C5D0),
+      PdfColor.fromInt(0xFFE97979),
+    ];
+    return palette[(rank - 1) % palette.length];
+  }
+
+  pw.Widget _buildOverviewVisual({
+    required List<_CategoryBreakdownItem> items,
+    required double totalAmount,
+    required String totalSpent,
+  }) {
+    return pw.Column(
+      children: [
+        pw.Container(
+          width: 180,
+          height: 180,
+          decoration: pw.BoxDecoration(
+            shape: pw.BoxShape.circle,
+            border: pw.Border.all(
+              color: PdfColor.fromHex('#DDE8F5'),
+              width: 18,
+            ),
+          ),
+          child: pw.Center(
+            child: pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                _text(
+                  totalSpent,
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _brandInk,
+                  ),
+                  align: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 6),
+                _text(
+                  '${items.length} categories',
+                  style: pw.TextStyle(fontSize: 9.5, color: _mutedText),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (items.isNotEmpty) ...[
+          pw.SizedBox(height: 14),
+          pw.Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            alignment: pw.WrapAlignment.center,
+            children: items.take(4).map((item) {
+              final ratio = totalAmount <= 0
+                  ? 0.0
+                  : (item.total / totalAmount).clamp(0.0, 1.0);
+              return pw.Row(
+                mainAxisSize: pw.MainAxisSize.min,
+                children: [
+                  pw.Container(
+                    width: 8,
+                    height: 8,
+                    decoration: pw.BoxDecoration(
+                      color: _paletteForRank(item.rank),
+                      shape: pw.BoxShape.circle,
+                    ),
+                  ),
+                  pw.SizedBox(width: 4),
+                  _text(
+                    '${(ratio * 100).toStringAsFixed(1)}%',
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: _mutedText,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  pw.Widget _buildCategoryBreakdownList({
+    required List<_CategoryBreakdownItem> items,
+    required double totalAmount,
+    required String totalLabel,
+  }) {
+    final widgets = <pw.Widget>[];
+    for (final item in items) {
+      final ratio = totalAmount <= 0
+          ? 0.0
+          : (item.total / totalAmount).clamp(0.0, 1.0);
+      widgets.add(
+        pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 10),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Container(
+                width: 10,
+                height: 10,
+                margin: const pw.EdgeInsets.only(top: 3),
+                decoration: pw.BoxDecoration(
+                  color: _paletteForRank(item.rank),
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: _text(
+                  item.label,
+                  style: pw.TextStyle(
+                    fontSize: 10.5,
+                    color: _brandInk,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              _text(
+                _formatAmount(item.total),
+                style: pw.TextStyle(
+                  fontSize: 10.5,
+                  color: _brandInk,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              _text(
+                '${(ratio * 100).toStringAsFixed(1)}%',
+                style: pw.TextStyle(
+                  fontSize: 9.5,
+                  color: _mutedText,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    widgets.add(
+      pw.Container(
+        margin: const pw.EdgeInsets.only(top: 6),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: pw.BoxDecoration(
+          color: PdfColor.fromHex('#F7FAFD'),
+          borderRadius: pw.BorderRadius.circular(14),
+          border: pw.Border.all(color: _panelBorder, width: 0.8),
+        ),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Expanded(
+              child: _text(
+                totalLabel,
+                style: pw.TextStyle(
+                  fontSize: 9.5,
+                  color: _mutedText,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            _text(
+              _formatAmount(totalAmount),
+              style: pw.TextStyle(
+                fontSize: 10.5,
+                color: _brandInk,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return pw.Column(children: widgets);
+  }
+
+  pw.Widget _buildOptionCOverviewSection({
+    required List<_CategoryBreakdownItem> items,
+    required double totalAmount,
+    required String totalSpent,
+    required String totalLabel,
+  }) {
+    final displayItems = items.take(6).toList();
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(
+          child: _buildSectionCard(
+            title: 'Spending Overview',
+            child: _buildOverviewVisual(
+              items: displayItems,
+              totalAmount: totalAmount,
+              totalSpent: totalSpent,
+            ),
+          ),
+        ),
+        pw.SizedBox(width: 14),
+        pw.Expanded(
+          child: _buildSectionCard(
+            title: 'Spending by Category',
+            child: _buildCategoryBreakdownList(
+              items: displayItems,
+              totalAmount: totalAmount,
+              totalLabel: totalLabel,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildOptionCFooterBanner() {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#EEF6FF'),
+        borderRadius: pw.BorderRadius.circular(14),
+      ),
+      child: _text(
+        'Great job staying on top of your finances!',
+        style: pw.TextStyle(
+          fontSize: 9.5,
+          color: _brandInk,
+          fontWeight: pw.FontWeight.bold,
+        ),
+      ),
     );
   }
 
@@ -449,75 +1483,77 @@ class ExportService {
     required List<String> detailHeaders,
     required List<List<String>> detailRows,
     required List<double> detailFlex,
-    List<List<String>>? secondaryTableRows,
-    List<String>? secondaryHeaders,
-    List<double>? secondaryFlex,
+    List<_CategoryBreakdownItem>? categoryBreakdown,
+    String? categoryBreakdownTotalLabel,
     List<String>? selectedCategories,
     String? period,
   }) async {
+    final normalizedReportTitle = reportTitle.trim().isEmpty
+        ? reportType
+        : reportTitle.trim();
+
     final fonts = await _loadFonts();
-    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
-    final doc = pw.Document();
+    final generatedAt = DateFormat(
+      'dd MMM yyyy  hh:mm a',
+    ).format(DateTime.now());
+
+    final doc = pw.Document(
+      title: normalizedReportTitle,
+      author: 'Personal Spending Tracker',
+    );
+
+    final categoryItems = categoryBreakdown ?? const <_CategoryBreakdownItem>[];
+    final totalAmount = categoryItems.fold<double>(
+      0,
+      (sum, item) => sum + item.total,
+    );
+
+    final displayMetrics = _buildDisplayMetrics(
+      totalSpent: totalSpent,
+      metrics: metrics,
+      categoryCount: selectedCategories?.length ?? categoryItems.length,
+    );
 
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 32),
         theme: pw.ThemeData.withFont(
           base: fonts.base,
           bold: fonts.base,
           italic: fonts.base,
           boldItalic: fonts.base,
         ),
-        margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 32),
-        header: (context) {
-          if (context.pageNumber == 1) return pw.SizedBox.shrink();
-          return pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 16),
-            padding: const pw.EdgeInsets.only(bottom: 8),
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(
-                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.8),
-              ),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                _text(
-                  reportTitle,
-                  style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                _text(
-                  'Page ${context.pageNumber}',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    color: PdfColor.fromHex('#657373'),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
         footer: (context) {
           return pw.Container(
-            margin: const pw.EdgeInsets.only(top: 12),
+            margin: const pw.EdgeInsets.only(top: 14),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                _text(
-                  generatedAt,
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    color: PdfColor.fromHex('#657373'),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColor.fromHex('#EEF7FF'),
+                    borderRadius: pw.BorderRadius.circular(14),
+                  ),
+                  child: _text(
+                    'Great job staying on top of your finances!',
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: _brandInk,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
                 ),
                 _text(
-                  '${context.pageNumber} / ${context.pagesCount}',
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
                   style: pw.TextStyle(
                     fontSize: 9,
-                    color: PdfColor.fromHex('#657373'),
+                    color: _mutedText,
+                    fontWeight: pw.FontWeight.bold,
                   ),
                 ),
               ],
@@ -525,46 +1561,56 @@ class ExportService {
           );
         },
         build: (context) => [
-          _buildHeroHeader(
-            reportTitle: reportTitle,
+          _buildOptionCHeader(
+            reportTitle: normalizedReportTitle,
             reportType: reportType,
             generatedAt: generatedAt,
-            totalSpent: totalSpent,
-            selectedCategories: selectedCategories,
             period: period,
           ),
+
+          pw.SizedBox(height: 18),
+
+          _buildOptionCSummaryCards(displayMetrics),
+
+          pw.SizedBox(height: 18),
+
+          _buildOptionCSelectedCategories(selectedCategories),
+
+          if (categoryItems.isNotEmpty) ...[
+            pw.SizedBox(height: 18),
+            _buildOptionCOverviewSection(
+              items: categoryItems,
+              totalAmount: totalAmount,
+              totalSpent: totalSpent,
+              totalLabel:
+                  categoryBreakdownTotalLabel ?? 'Selected categories total',
+            ),
+          ],
+
           pw.SizedBox(height: 20),
-          _buildSummarySection(metrics),
-          if (selectedCategories != null && selectedCategories.isNotEmpty) ...[
-            pw.SizedBox(height: 22),
-            _buildSelectedCategoriesSection(selectedCategories),
-          ],
-          if (secondaryHeaders != null &&
-              secondaryTableRows != null &&
-              secondaryTableRows.isNotEmpty) ...[
-            pw.SizedBox(height: 22),
-            _buildSectionTitle(
-              'Spending by category',
-              subtitle: 'Summary totals grouped by category.',
-            ),
-            pw.SizedBox(height: 10),
-            _buildSimpleTable(
-              headers: secondaryHeaders,
-              rows: secondaryTableRows,
-              columnFlex: secondaryFlex,
-            ),
-          ],
-          pw.SizedBox(height: 22),
-          _buildSectionTitle(
-            'Transaction details',
-            subtitle: 'Detailed records included in this export.',
+
+          _buildDetailSectionHeader(
+            title: 'Transactions',
+            subtitle:
+                'Detailed records included in this export, formatted for review and archiving.',
           ),
+
           pw.SizedBox(height: 10),
-          _buildSimpleTable(
-            headers: detailHeaders,
-            rows: detailRows,
-            columnFlex: detailFlex,
-          ),
+
+          if (detailRows.isEmpty)
+            _buildSectionCard(
+              title: 'No transactions',
+              child: _text(
+                'No transactions were found for the selected filters and date range.',
+                style: pw.TextStyle(fontSize: 10.5, color: _mutedText),
+              ),
+            )
+          else
+            _buildSimpleTable(
+              headers: detailHeaders,
+              rows: detailRows,
+              columnFlex: detailFlex,
+            ),
         ],
       ),
     );
@@ -669,6 +1715,7 @@ class ExportService {
     List<String>? categoryFilters,
     required String reportTitle,
   }) async {
+    await prepareLocale();
     final dailyTotals = provider.getDailyTotalsForPeriod();
     final rows = <_PersonalRow>[];
     final categoryTotals = <String, double>{};
@@ -698,16 +1745,13 @@ class ExportService {
       }
     }
 
-    final totalsRows =
-        categoryTotals.entries
-            .map((entry) => [entry.key, _formatAmount(entry.value)])
-            .toList()
-          ..add(['All selected categories total', _formatAmount(overallTotal)]);
+    final categoryBreakdown = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final detailRows = rows
         .map(
           (row) => [
             _dateFmt.format(row.date),
-            row.item.isEmpty ? 'Spending' : row.item,
+            row.item.isEmpty ? _tr('Spending') : row.item,
             row.category,
             row.bank,
             row.qty?.toString() ?? '',
@@ -722,33 +1766,39 @@ class ExportService {
 
     final bytes = await _buildReportPdf(
       reportTitle: reportTitle,
-      reportType: 'Personal spending report',
+      reportType: _tr('Personal spending report'),
       totalSpent: _formatAmount(overallTotal),
       selectedCategories: categoryFilters,
       period: period,
       metrics: [
-        _SummaryMetric(label: 'Transactions', value: '${rows.length}'),
+        _SummaryMetric(label: _tr('Transactions'), value: '${rows.length}'),
         _SummaryMetric(
-          label: 'Total spent',
+          label: _tr('Total spent'),
           value: _formatAmount(overallTotal),
         ),
         _SummaryMetric(
-          label: 'Average transaction',
+          label: _tr('Average transaction'),
           value: rows.isEmpty
               ? _formatAmount(0)
               : _formatAmount(overallTotal / rows.length),
         ),
       ],
-      secondaryHeaders: const ['Category', 'Total'],
-      secondaryTableRows: totalsRows,
-      secondaryFlex: const [2.2, 1],
-      detailHeaders: const [
-        'Date',
-        'Description',
-        'Category',
-        'Bank',
-        'Qty',
-        'Amount',
+      categoryBreakdown: [
+        for (var i = 0; i < categoryBreakdown.length; i++)
+          _CategoryBreakdownItem(
+            label: categoryBreakdown[i].key,
+            total: categoryBreakdown[i].value,
+            rank: i + 1,
+          ),
+      ],
+      categoryBreakdownTotalLabel: _tr('All selected categories total'),
+      detailHeaders: [
+        _tr('Date'),
+        _tr('Description'),
+        _tr('Category'),
+        _tr('Bank'),
+        _tr('Qty'),
+        _tr('Amount'),
       ],
       detailRows: detailRows,
       detailFlex: const [1.2, 2.4, 1.6, 1.4, 0.8, 1],
@@ -759,7 +1809,7 @@ class ExportService {
       'personal_spendings$suffix.pdf',
       bytes,
     );
-    await _shareFile(file, text: 'Personal spendings (PDF)');
+    await _shareFile(file, text: _tr('Personal spendings (PDF)'));
   }
 
   Future<void> exportCategoryPdfAndShare(
@@ -767,6 +1817,7 @@ class ExportService {
     required String category,
     required String reportTitle,
   }) async {
+    await prepareLocale();
     final rows = provider.getCategoryRecords(category);
     final total = rows.fold<double>(0, (sum, row) => sum + row.entry.amount);
     final transactionCount = rows.length;
@@ -780,7 +1831,7 @@ class ExportService {
             _dateFmt.format(row.date),
             row.entry.item?.trim().isNotEmpty == true
                 ? row.entry.item!.trim()
-                : 'Spending',
+                : _tr('Spending'),
             row.entry.bank ?? '',
             row.entry.qty?.toString() ?? '',
             row.entry.amount.toStringAsFixed(2),
@@ -794,16 +1845,25 @@ class ExportService {
 
     final bytes = await _buildReportPdf(
       reportTitle: reportTitle,
-      reportType: 'Category spending report',
+      reportType: _tr('Category spending report'),
       totalSpent: _formatAmount(total),
       selectedCategories: [category],
       period: history,
       metrics: [
-        _SummaryMetric(label: 'Transactions', value: '$transactionCount'),
-        _SummaryMetric(label: 'Total spent', value: _formatAmount(total)),
-        _SummaryMetric(label: 'Average spend', value: _formatAmount(average)),
+        _SummaryMetric(label: _tr('Transactions'), value: '$transactionCount'),
+        _SummaryMetric(label: _tr('Total spent'), value: _formatAmount(total)),
+        _SummaryMetric(
+          label: _tr('Average spend'),
+          value: _formatAmount(average),
+        ),
       ],
-      detailHeaders: const ['Date', 'Description', 'Bank', 'Qty', 'Amount'],
+      detailHeaders: [
+        _tr('Date'),
+        _tr('Description'),
+        _tr('Bank'),
+        _tr('Qty'),
+        _tr('Amount'),
+      ],
       detailRows: detailRows,
       detailFlex: const [1.2, 2.8, 1.8, 0.8, 1],
     );
@@ -812,7 +1872,7 @@ class ExportService {
       'category_${_sanitizeFilenamePart(category)}.pdf',
       bytes,
     );
-    await _shareFile(file, text: 'Category spending report');
+    await _shareFile(file, text: _tr('Category spending report'));
   }
 
   Future<void> exportOtherCsvAndShare(
@@ -943,11 +2003,8 @@ class ExportService {
           ],
         )
         .toList();
-    final totalsRows =
-        categoryTotals.entries
-            .map((entry) => [entry.key, _formatAmount(entry.value)])
-            .toList()
-          ..add(['All selected categories total', _formatAmount(overallTotal)]);
+    final categoryBreakdown = categoryTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     final bytes = await _buildReportPdf(
       reportTitle: reportTitle,
@@ -967,9 +2024,15 @@ class ExportService {
               : _formatAmount(overallTotal / entries.length),
         ),
       ],
-      secondaryHeaders: const ['Category', 'Total'],
-      secondaryTableRows: totalsRows,
-      secondaryFlex: const [2.2, 1],
+      categoryBreakdown: [
+        for (var i = 0; i < categoryBreakdown.length; i++)
+          _CategoryBreakdownItem(
+            label: categoryBreakdown[i].key,
+            total: categoryBreakdown[i].value,
+            rank: i + 1,
+          ),
+      ],
+      categoryBreakdownTotalLabel: 'All selected categories total',
       detailHeaders: const [
         'Date',
         'Title',
@@ -1007,10 +2070,10 @@ class ExportService {
       rows.add(
         DailySpendingReportRow(
           timestamp: normalizedDate,
-          source: 'Personal',
+          source: _tr('Personal'),
           description: (entry.item?.trim().isNotEmpty ?? false)
               ? entry.item!.trim()
-              : 'Spending',
+              : _tr('Spending'),
           category: category,
           bank: entry.bank ?? '',
           qty: entry.qty,
@@ -1023,15 +2086,15 @@ class ExportService {
     for (final entry in otherEntries) {
       final category =
           (entry.category == null || entry.category!.trim().isEmpty)
-          ? 'Uncategorized'
+          ? _tr('Uncategorized')
           : entry.category!.trim();
       rows.add(
         DailySpendingReportRow(
           timestamp: entry.date,
-          source: 'Other',
+          source: _tr('Other'),
           description: (entry.title?.trim().isNotEmpty ?? false)
               ? entry.title!.trim()
-              : 'Other spending',
+              : _tr('Other spending'),
           category: category,
           bank: entry.bank ?? '',
           qty: entry.qty,
@@ -1047,7 +2110,7 @@ class ExportService {
 
     return DailySpendingReportData(
       date: normalizedDate,
-      reportTitle: 'Daily Spending Report',
+      reportTitle: _tr('Daily Spending Report'),
       rows: rows,
       categoryTotals: categoryTotals,
       totalSpent: totalSpent,
@@ -1058,6 +2121,19 @@ class ExportService {
   Future<File> generateDailySpendingReportPdf(
     DailySpendingReportData reportData,
   ) async {
+    await prepareLocale();
+    final bytes = await generateDailySpendingReportPdfBytes(reportData);
+
+    return _writeTempBytesFile(
+      'daily_spending_${_sanitizeFilenamePart(_dateFmt.format(reportData.date))}.pdf',
+      bytes,
+    );
+  }
+
+  Future<List<int>> generateDailySpendingReportPdfBytes(
+    DailySpendingReportData reportData,
+  ) async {
+    await prepareLocale();
     final detailRows = reportData.rows
         .map(
           (row) => [
@@ -1072,57 +2148,53 @@ class ExportService {
         )
         .toList();
 
-    final totalsRows = reportData.categoryTotals.entries.toList()
+    final categoryBreakdown = reportData.categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-
-    final formattedTotalsRows =
-        totalsRows
-            .map((entry) => [entry.key, _formatAmount(entry.value)])
-            .toList()
-          ..add(['All categories total', _formatAmount(reportData.totalSpent)]);
 
     final bytes = await _buildReportPdf(
       reportTitle: reportData.reportTitle,
-      reportType: 'Daily spending report',
+      reportType: _tr('Daily spending report'),
       totalSpent: _formatAmount(reportData.totalSpent),
       selectedCategories: reportData.categories,
       period: _dateFmt.format(reportData.date),
       metrics: [
         _SummaryMetric(
-          label: 'Transactions',
+          label: _tr('Transactions'),
           value: '${reportData.rows.length}',
         ),
         _SummaryMetric(
-          label: 'Total spent',
+          label: _tr('Total spent'),
           value: _formatAmount(reportData.totalSpent),
         ),
         _SummaryMetric(
-          label: 'Average transaction',
+          label: _tr('Average transaction'),
           value: reportData.rows.isEmpty
               ? _formatAmount(0)
               : _formatAmount(reportData.totalSpent / reportData.rows.length),
         ),
       ],
-      secondaryHeaders: const ['Category', 'Total'],
-      secondaryTableRows: formattedTotalsRows,
-      secondaryFlex: const [2.2, 1],
-      detailHeaders: const [
-        'Time',
-        'Source',
-        'Description',
-        'Category',
-        'Bank',
-        'Qty',
-        'Amount',
+      categoryBreakdown: [
+        for (var i = 0; i < categoryBreakdown.length; i++)
+          _CategoryBreakdownItem(
+            label: categoryBreakdown[i].key,
+            total: categoryBreakdown[i].value,
+            rank: i + 1,
+          ),
+      ],
+      categoryBreakdownTotalLabel: _tr('All categories total'),
+      detailHeaders: [
+        _tr('Time'),
+        _tr('Source'),
+        _tr('Description'),
+        _tr('Category'),
+        _tr('Bank'),
+        _tr('Qty'),
+        _tr('Amount'),
       ],
       detailRows: detailRows,
       detailFlex: const [1, 1.2, 2.7, 1.6, 1.3, 0.7, 1],
     );
-
-    return _writeTempBytesFile(
-      'daily_spending_${_sanitizeFilenamePart(_dateFmt.format(reportData.date))}.pdf',
-      bytes,
-    );
+    return bytes;
   }
 }
 
@@ -1137,6 +2209,18 @@ class _SummaryMetric {
   final String value;
 
   const _SummaryMetric({required this.label, required this.value});
+}
+
+class _CategoryBreakdownItem {
+  final String label;
+  final double total;
+  final int rank;
+
+  const _CategoryBreakdownItem({
+    required this.label,
+    required this.total,
+    required this.rank,
+  });
 }
 
 class _PersonalRow {

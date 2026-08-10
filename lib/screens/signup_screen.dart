@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../localization/language_constants.dart';
 import '../../services/auth_service.dart';
+import '../widgets/common/app_loading_skeletons.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -63,13 +65,13 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          "Create account",
+                          getTranslated(context, 'Create account'),
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "Let's set up your profile",
+                          getTranslated(context, "Let's set up your profile"),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 16),
@@ -89,37 +91,37 @@ class _SignupScreenState extends State<SignupScreen> {
                         const SizedBox(height: 12),
                         TextField(
                           controller: _usernameController,
-                          decoration: const InputDecoration(
-                            labelText: "Username",
-                            hintText: "e.g. ahmed_98",
-                            prefixIcon: Icon(Icons.alternate_email),
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: getTranslated(context, 'Username'),
+                            hintText: 'e.g. ahmed_98',
+                            prefixIcon: const Icon(Icons.alternate_email),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _emailController,
-                          decoration: const InputDecoration(
-                            labelText: "Email",
-                            prefixIcon: Icon(Icons.email_outlined),
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: getTranslated(context, 'Email'),
+                            prefixIcon: const Icon(Icons.email_outlined),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _passController,
                           obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: "Password",
-                            prefixIcon: Icon(Icons.lock_outline),
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: getTranslated(context, 'Password'),
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           child: _loading
-                              ? const Center(child: CircularProgressIndicator())
+                              ? const FormButtonLoadingSkeleton()
                               : ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: cs.primary,
@@ -132,8 +134,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                     ),
                                   ),
                                   onPressed: _signup,
-                                  child: const Text(
-                                    "Create account",
+                                  child: Text(
+                                    getTranslated(context, 'Create account'),
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -145,7 +147,12 @@ class _SignupScreenState extends State<SignupScreen> {
                           onPressed: () {
                             Navigator.pop(context);
                           },
-                          child: const Text("Already have an account? Login"),
+                          child: Text(
+                            getTranslated(
+                              context,
+                              'Already have an account? Login',
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -166,7 +173,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     if (username.isEmpty || email.isEmpty || password.isEmpty) {
       setState(() {
-        _error = "Please fill all required fields.";
+        _error = getTranslated(context, 'Please fill all required fields.');
       });
       return;
     }

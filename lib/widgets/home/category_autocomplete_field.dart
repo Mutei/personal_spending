@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+import '../../localization/language_constants.dart';
+
 class CategoryAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
   final FocusNode? focusNode;
@@ -15,7 +17,7 @@ class CategoryAutocompleteField extends StatefulWidget {
     required this.allCategories,
     this.focusNode,
     this.labelText = "Category (optional)",
-    this.hintText = "Start typing…",
+    this.hintText = "Start typing...",
     this.maxOptions = 8,
   });
 
@@ -231,8 +233,8 @@ class _CategoryAutocompleteFieldState extends State<CategoryAutocompleteField> {
         controller: widget.controller,
         focusNode: _focusNode,
         decoration: InputDecoration(
-          labelText: widget.labelText,
-          hintText: widget.hintText,
+          labelText: getTranslated(context, widget.labelText),
+          hintText: getTranslated(context, widget.hintText),
           border: const OutlineInputBorder(),
         ),
         textInputAction: TextInputAction.done,

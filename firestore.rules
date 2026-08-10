@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+
+      match /daily_spendings/{docId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+
+      match /other_spendings/{dayId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+
+        match /entries/{entryId} {
+          allow read, write: if isOwner(uid) || isAdmin();
+        }
+      }
+
+      match /fcm_tokens/{tokenId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+  }
+}

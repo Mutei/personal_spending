@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../localization/language_constants.dart';
 import '../../../providers/spending_provider.dart';
 
 class SpendingEntryTile extends StatelessWidget {
@@ -17,77 +19,186 @@ class SpendingEntryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final itemLabel = entry.item == null || entry.item!.isEmpty
+        ? getTranslated(context, 'Spending')
+        : entry.item!;
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: onEdit,
+            child: Ink(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: cs.outlineVariant.withValues(alpha: 0.58),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.shadow.withValues(alpha: 0.05),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      entry.amount.toStringAsFixed(0),
+                      style: text.titleSmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          itemLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _MetaChip(
+                              icon: Icons.payments_outlined,
+                              label:
+                                  '${getTranslated(context, 'Amount')}: ${entry.amount.toStringAsFixed(2)}',
+                            ),
+                            if (entry.category != null &&
+                                entry.category!.isNotEmpty)
+                              _MetaChip(
+                                icon: Icons.category_outlined,
+                                label:
+                                    '${getTranslated(context, 'Category')}: ${entry.category}',
+                              ),
+                            if (entry.bank != null && entry.bank!.isNotEmpty)
+                              _MetaChip(
+                                icon: Icons.account_balance_wallet_outlined,
+                                label:
+                                    '${getTranslated(context, 'Bank / card')}: ${entry.bank}',
+                              ),
+                            if (entry.qty != null)
+                              _MetaChip(
+                                icon: Icons.confirmation_number_outlined,
+                                label:
+                                    '${getTranslated(context, 'Quantity')}: ${entry.qty}',
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    children: [
+                      _TileActionButton(
+                        icon: Icons.edit_rounded,
+                        tooltip: getTranslated(context, 'Edit'),
+                        onPressed: onEdit,
+                      ),
+                      const SizedBox(height: 8),
+                      _TileActionButton(
+                        icon: Icons.delete_outline_rounded,
+                        tooltip: getTranslated(context, 'Delete'),
+                        onPressed: onDelete,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetaChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withOpacity(0.05),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: cs.primary.withOpacity(0.15),
-            child: Text(
-              entry.amount.toStringAsFixed(0),
-              style: TextStyle(
-                color: cs.primary,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
+    );
+  }
+}
+
+class _TileActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _TileActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.40),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, size: 18, color: cs.onSurfaceVariant),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.item == null || entry.item!.isEmpty
-                      ? "Spending"
-                      : entry.item!,
-                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Amount: ${entry.amount.toStringAsFixed(2)}",
-                  style: text.bodySmall,
-                ),
-                if (entry.category != null && entry.category!.isNotEmpty)
-                  Text("Category: ${entry.category}", style: text.bodySmall),
-                if (entry.bank != null && entry.bank!.isNotEmpty)
-                  Text("Bank / card: ${entry.bank}", style: text.bodySmall),
-                if (entry.qty != null)
-                  Text("Quantity: ${entry.qty}", style: text.bodySmall),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            children: [
-              IconButton(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit, size: 20),
-                tooltip: "Edit",
-              ),
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete, size: 20),
-                tooltip: "Delete",
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

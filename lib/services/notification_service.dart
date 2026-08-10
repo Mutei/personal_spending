@@ -3,6 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../localization/language_constants.dart';
+
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -18,32 +20,70 @@ class NotificationService {
     await requestPermission();
   }
 
-  static Future<void> requestPermission() async {
+  static Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
       final androidImpl = _notifications
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-      await androidImpl?.requestNotificationsPermission();
+
+      final granted = await androidImpl?.requestNotificationsPermission();
+      return granted ?? false;
     }
+
+    return true;
   }
 
   static Future<void> showOverSpendNotification({
     required double todayTotal,
     required double allowed,
   }) async {
+    final title = await getTranslatedForCurrentLocale(
+      'Daily spending exceeded',
+    );
+    final body = await getTranslatedForCurrentLocale(
+      'You spent {todayTotal} but your limit is {allowed}',
+    );
+    await showNotification(
+      notificationKey: 'overspend-alert',
+      title: title,
+      body: body
+          .replaceAll('{todayTotal}', todayTotal.toStringAsFixed(2))
+          .replaceAll('{allowed}', allowed.toStringAsFixed(2)),
+    );
+  }
+
+  static Future<void> showNotification({
+    required String notificationKey,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    final granted = await requestPermission();
+
+    if (!granted) {
+      throw Exception(
+        await getTranslatedForCurrentLocale(
+          'Notification permission was not granted.',
+        ),
+      );
+    }
+
     const androidDetails = AndroidNotificationDetails(
       'spending_channel',
       'Spending Alerts',
-      importance: Importance.high,
+      channelDescription:
+          'Notifications for spending summaries and budget alerts',
+      importance: Importance.max,
       priority: Priority.high,
     );
 
     await _notifications.show(
-      1,
-      'Daily spending exceeded',
-      'You spent ${todayTotal.toStringAsFixed(2)} but your limit is ${allowed.toStringAsFixed(2)}',
+      _notificationIdFromKey(notificationKey),
+      title,
+      body,
       const NotificationDetails(android: androidDetails),
+      payload: payload,
     );
   }
 
@@ -72,7 +112,8 @@ class NotificationService {
       body,
       scheduledDate,
       const NotificationDetails(android: androidDetails),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       payload: payload,
       matchDateTimeComponents: null,
     );

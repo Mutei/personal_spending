@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Generic card style for sections in the Home screen
 class HomeSectionCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -10,7 +9,7 @@ class HomeSectionCard extends StatelessWidget {
   const HomeSectionCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(18),
     this.margin,
     this.backgroundColor,
   });
@@ -18,21 +17,32 @@ class HomeSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: margin,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: backgroundColor ?? cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withOpacity(0.06),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+
+    return RepaintBoundary(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        margin: margin,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: backgroundColor ?? cs.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.62)),
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.05),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

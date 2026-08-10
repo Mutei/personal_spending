@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../localization/language_constants.dart';
 import '../providers/spending_provider.dart';
 
 class InsightsScreen extends StatelessWidget {
@@ -24,7 +25,10 @@ class InsightsScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Insights'), centerTitle: false),
+      appBar: AppBar(
+        title: Text(getTranslated(context, 'Insights')),
+        centerTitle: false,
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
@@ -51,7 +55,7 @@ class InsightsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Total spending",
+                        getTranslated(context, 'Total spending'),
                         style: text.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
@@ -77,13 +81,20 @@ class InsightsScreen extends StatelessWidget {
           const SizedBox(height: 16),
 
           // =================== CATEGORY DONUT ===================
-          _SectionTitle(title: "Spending by category", cs: cs, text: text),
+          _SectionTitle(
+            title: getTranslated(context, 'Spending by category'),
+            cs: cs,
+            text: text,
+          ),
           const SizedBox(height: 10),
 
           if (categoryTotals.isEmpty)
             _EmptyState(
-              title: "No data yet",
-              subtitle: "Add some spendings to see insights here.",
+              title: getTranslated(context, 'No data yet'),
+              subtitle: getTranslated(
+                context,
+                'Add some spendings to see insights here.',
+              ),
               cs: cs,
               text: text,
               icon: Icons.pie_chart_rounded,
@@ -131,7 +142,7 @@ class InsightsScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    "Total",
+                                    getTranslated(context, 'Total'),
                                     style: text.labelMedium?.copyWith(
                                       color: cs.onSurfaceVariant,
                                       fontWeight: FontWeight.w700,
@@ -158,7 +169,7 @@ class InsightsScreen extends StatelessWidget {
 
                   // Legend
                   Text(
-                    "Categories",
+                    getTranslated(context, 'Categories'),
                     style: text.titleSmall?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -175,13 +186,20 @@ class InsightsScreen extends StatelessWidget {
           const SizedBox(height: 18),
 
           // =================== DAILY BAR CHART ===================
-          _SectionTitle(title: "Daily spending", cs: cs, text: text),
+          _SectionTitle(
+            title: getTranslated(context, 'Daily spending'),
+            cs: cs,
+            text: text,
+          ),
           const SizedBox(height: 10),
 
           if (dailyTotals.isEmpty)
             _EmptyState(
-              title: "No daily records",
-              subtitle: "No spendings found in this period.",
+              title: getTranslated(context, 'No daily records'),
+              subtitle: getTranslated(
+                context,
+                'No spendings found in this period.',
+              ),
               cs: cs,
               text: text,
               icon: Icons.bar_chart_rounded,
@@ -220,17 +238,17 @@ class InsightsScreen extends StatelessWidget {
                           getTitlesWidget: (value, meta) {
                             final interval = _niceInterval(dailyTotals);
 
-                            // ✅ show only clean ticks: 0, interval, 2*interval, ...
+                            // âœ… show only clean ticks: 0, interval, 2*interval, ...
                             final isCleanTick =
                                 (value % interval).abs() < 0.0001;
 
-                            // ✅ hide 0 (optional)
+                            // âœ… hide 0 (optional)
                             if (value == 0) return const SizedBox.shrink();
 
-                            // ✅ hide non-clean ticks (this stops the "extra number")
+                            // âœ… hide non-clean ticks (this stops the "extra number")
                             if (!isCleanTick) return const SizedBox.shrink();
 
-                            // ✅ hide the very top label (often overlaps with border)
+                            // âœ… hide the very top label (often overlaps with border)
                             final maxY = meta.max;
                             if ((maxY - value) < interval * 0.35)
                               return const SizedBox.shrink();
@@ -340,13 +358,20 @@ class InsightsScreen extends StatelessWidget {
           const SizedBox(height: 18),
 
           // =================== RECOMMENDATIONS ===================
-          _SectionTitle(title: "Recommendations", cs: cs, text: text),
+          _SectionTitle(
+            title: getTranslated(context, 'Recommendations'),
+            cs: cs,
+            text: text,
+          ),
           const SizedBox(height: 10),
 
           if (recs.isEmpty)
             _EmptyState(
-              title: "No recommendations yet",
-              subtitle: "Spend a bit more and I’ll suggest optimizations.",
+              title: getTranslated(context, 'No recommendations yet'),
+              subtitle: getTranslated(
+                context,
+                "Spend a bit more and I'll suggest optimizations.",
+              ),
               cs: cs,
               text: text,
               icon: Icons.lightbulb_rounded,
@@ -446,7 +471,7 @@ class InsightsScreen extends StatelessWidget {
     if (slices.isEmpty) return [];
 
     return slices.map((s) {
-      // Don’t put long names inside the chart (fixes your first screenshot)
+      // Donâ€™t put long names inside the chart (fixes your first screenshot)
       final title = s.showLabel ? "${s.pct.toStringAsFixed(1)}%" : "";
 
       // Pick readable color for label
@@ -478,7 +503,7 @@ class InsightsScreen extends StatelessWidget {
 
   double _niceInterval(List<MapEntry<DateTime, double>> dailyTotals) {
     final max = _maxY(dailyTotals);
-    // Basic “nice” step
+    // Basic â€œniceâ€ step
     if (max <= 50) return 10;
     if (max <= 100) return 20;
     if (max <= 200) return 50;

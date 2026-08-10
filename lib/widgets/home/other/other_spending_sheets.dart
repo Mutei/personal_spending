@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../localization/language_constants.dart';
 import '../../../providers/other_spending_provider.dart';
 import '../../../sheets/home_sheets.dart';
 import '../../../services/export_service.dart';
@@ -43,19 +44,22 @@ class OtherSpendingSheets {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Export other spendings',
+                      getTranslated(context, 'Export other spendings'),
                       style: text.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text('Choose what to export:', style: text.bodyMedium),
+                    Text(
+                      getTranslated(context, 'Choose what to export:'),
+                      style: text.bodyMedium,
+                    ),
                     const SizedBox(height: 8),
                     RadioListTile<String>(
                       contentPadding: EdgeInsets.zero,
                       value: 'all',
                       groupValue: scope,
-                      title: const Text('All categories'),
+                      title: Text(getTranslated(context, 'All categories')),
                       onChanged: (v) {
                         setState(() {
                           scope = v!;
@@ -67,7 +71,7 @@ class OtherSpendingSheets {
                       contentPadding: EdgeInsets.zero,
                       value: 'category',
                       groupValue: scope,
-                      title: const Text('Specific category'),
+                      title: Text(getTranslated(context, 'Specific category')),
                       onChanged: (v) {
                         setState(() => scope = v!);
                       },
@@ -80,7 +84,10 @@ class OtherSpendingSheets {
                           children: [
                             Row(
                               children: [
-                                Text('Categories', style: text.bodyMedium),
+                                Text(
+                                  getTranslated(context, 'Categories'),
+                                  style: text.bodyMedium,
+                                ),
                                 const Spacer(),
                                 TextButton(
                                   onPressed: categories.isEmpty
@@ -92,7 +99,9 @@ class OtherSpendingSheets {
                                               ..addAll(categories);
                                           });
                                         },
-                                  child: const Text('Select all'),
+                                  child: Text(
+                                    getTranslated(context, 'Select all'),
+                                  ),
                                 ),
                                 TextButton(
                                   onPressed: selectedCategories.isEmpty
@@ -100,7 +109,9 @@ class OtherSpendingSheets {
                                       : () {
                                           setState(selectedCategories.clear);
                                         },
-                                  child: const Text('Clear all'),
+                                  child: Text(
+                                    getTranslated(context, 'Clear all'),
+                                  ),
                                 ),
                               ],
                             ),
@@ -108,14 +119,20 @@ class OtherSpendingSheets {
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  'No categories available to export.',
+                                  getTranslated(
+                                    context,
+                                    'No categories available to export.',
+                                  ),
                                   style: text.bodySmall,
                                 ),
                               )
                             else ...[
                               Text(
                                 selectedCategories.isEmpty
-                                    ? 'No categories selected'
+                                    ? getTranslated(
+                                        context,
+                                        'No categories selected',
+                                      )
                                     : '${selectedCategories.length} selected: ${selectedCategories.join(', ')}',
                                 style: text.bodySmall,
                               ),
@@ -161,9 +178,12 @@ class OtherSpendingSheets {
                               if (scope == 'category' &&
                                   (filters == null || filters.isEmpty)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Please select at least one category first',
+                                      getTranslated(
+                                        context,
+                                        'Please select at least one category first',
+                                      ),
                                     ),
                                   ),
                                 );
@@ -177,9 +197,12 @@ class OtherSpendingSheets {
                                     );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Other spendings exported as CSV',
+                                        getTranslated(
+                                          context,
+                                          'Other spendings exported as CSV',
+                                        ),
                                       ),
                                     ),
                                   );
@@ -188,7 +211,13 @@ class OtherSpendingSheets {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Export failed: $e'),
+                                      content: Text(
+                                        getTranslatedWithArgs(
+                                          context,
+                                          'Export failed: {error}',
+                                          {'error': '$e'},
+                                        ),
+                                      ),
                                     ),
                                   );
                                 }
@@ -208,9 +237,12 @@ class OtherSpendingSheets {
                               if (scope == 'category' &&
                                   (filters == null || filters.isEmpty)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Please select at least one category first',
+                                      getTranslated(
+                                        context,
+                                        'Please select at least one category first',
+                                      ),
                                     ),
                                   ),
                                 );
@@ -218,10 +250,16 @@ class OtherSpendingSheets {
                               }
                               try {
                                 final defaultTitle = filters == null
-                                    ? 'Other Spending Report'
+                                    ? getTranslated(
+                                        context,
+                                        'Other Spending Report',
+                                      )
                                     : filters.length == 1
-                                    ? '${filters.first} Other Spending Report'
-                                    : 'Selected Categories Other Spending Report';
+                                    ? '${filters.first} ${getTranslated(context, 'Other Spending Report')}'
+                                    : getTranslated(
+                                        context,
+                                        'Selected Categories Other Spending Report',
+                                      );
                                 final reportTitle =
                                     await HomeSheets.promptForReportTitle(
                                       context,
@@ -238,9 +276,12 @@ class OtherSpendingSheets {
                                     );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Other spendings exported as PDF',
+                                        getTranslated(
+                                          context,
+                                          'Other spendings exported as PDF',
+                                        ),
                                       ),
                                     ),
                                   );
@@ -249,7 +290,13 @@ class OtherSpendingSheets {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Export failed: $e'),
+                                      content: Text(
+                                        getTranslatedWithArgs(
+                                          context,
+                                          'Export failed: {error}',
+                                          {'error': '$e'},
+                                        ),
+                                      ),
                                     ),
                                   );
                                 }
@@ -274,21 +321,27 @@ class OtherSpendingSheets {
   // ----------------- confirm delete dialog -----------------
   static Future<bool?> confirmDeleteDialog(
     BuildContext context, {
-    String message = 'Are you sure you want to delete this entry?',
+    String? message,
   }) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete'),
-        content: Text(message),
+        title: Text(getTranslated(context, 'Delete')),
+        content: Text(
+          message ??
+              getTranslated(
+                context,
+                'Are you sure you want to delete this entry?',
+              ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(getTranslated(context, 'Cancel')),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Delete'),
+            child: Text(getTranslated(context, 'Delete')),
           ),
         ],
       ),
@@ -338,15 +391,17 @@ class OtherSpendingSheets {
                   children: [
                     Text(
                       entry != null
-                          ? "Edit other spending"
-                          : "Add other spending",
+                          ? getTranslated(context, 'Edit other spending')
+                          : getTranslated(context, 'Add other spending'),
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
-                          child: Text("Date: ${dateFmt.format(selectedDate)}"),
+                          child: Text(
+                            '${getTranslated(context, 'Date')}: ${dateFmt.format(selectedDate)}',
+                          ),
                         ),
                         TextButton.icon(
                           onPressed: () async {
@@ -361,7 +416,7 @@ class OtherSpendingSheets {
                             }
                           },
                           icon: const Icon(Icons.calendar_today, size: 18),
-                          label: const Text("Pick"),
+                          label: Text(getTranslated(context, 'Pick')),
                         ),
                       ],
                     ),
@@ -369,32 +424,38 @@ class OtherSpendingSheets {
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Amount",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(context, 'Amount'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: "Title (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(context, 'Title (optional)'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: "Category (e.g. Work, Parents)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          context,
+                          'Category (e.g. Work, Parents)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: bankController,
-                      decoration: const InputDecoration(
-                        labelText: "Bank / card (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          context,
+                          'Bank / card (optional)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -402,8 +463,11 @@ class OtherSpendingSheets {
                     TextField(
                       controller: qtyController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Quantity (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          context,
+                          'Quantity (optional)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -427,7 +491,7 @@ class OtherSpendingSheets {
                                 }
                               },
                               icon: const Icon(Icons.delete),
-                              label: const Text("Delete"),
+                              label: Text(getTranslated(context, 'Delete')),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -472,7 +536,7 @@ class OtherSpendingSheets {
                                 Navigator.pop(ctx);
                               },
                               icon: const Icon(Icons.save),
-                              label: const Text("Save"),
+                              label: Text(getTranslated(context, 'Save')),
                             ),
                           ),
                         ],
@@ -514,7 +578,7 @@ class OtherSpendingSheets {
                           Navigator.pop(ctx);
                         },
                         icon: const Icon(Icons.save),
-                        label: const Text("Add"),
+                        label: Text(getTranslated(context, 'Add')),
                       ),
                   ],
                 ),

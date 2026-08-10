@@ -1,56 +1,41 @@
 import 'package:flutter/material.dart';
 
+import '../../common/app_shimmer.dart';
+
 class OtherLoadingWidget extends StatelessWidget {
   const OtherLoadingWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: cs.shadow.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+    return AppShimmer(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const ShimmerBlock(
+              width: double.infinity,
+              height: 170,
+              borderRadius: BorderRadius.all(Radius.circular(24)),
             ),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3.2,
-                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading other spendings...',
-                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Please wait a moment',
-                  style: text.bodySmall?.copyWith(
-                    color: cs.onSurface.withOpacity(0.6),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 12),
+            const ShimmerBlock(
+              width: double.infinity,
+              height: 210,
+              borderRadius: BorderRadius.all(Radius.circular(24)),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            ...List.generate(
+              4,
+              (_) => const ShimmerBlock(
+                width: double.infinity,
+                height: 86,
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                margin: EdgeInsets.only(bottom: 12),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

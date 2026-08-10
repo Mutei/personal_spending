@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../models/saved_account.dart';
 import '../providers/spending_provider.dart';
 import '../providers/other_spending_provider.dart';
@@ -53,7 +54,9 @@ class _RootScreenState extends State<RootScreen> {
     final accounts = await _store.getAccounts();
 
     // ✅ biometric before showing accounts (optional but ok)
-    final ok = await _bio.unlock(reason: "Switch account");
+    final ok = await _bio.unlock(
+      reason: getTranslated(context, 'Switch account'),
+    );
     if (!ok || !mounted) return;
 
     showModalBottomSheet(
@@ -69,18 +72,23 @@ class _RootScreenState extends State<RootScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const ListTile(
+                ListTile(
                   title: Text(
-                    "Accounts",
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                    getTranslated(context, 'Accounts'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  subtitle: Text("Long-press to open this anytime"),
+                  subtitle: Text(
+                    getTranslated(context, 'Long-press to open this anytime'),
+                  ),
                 ),
                 if (accounts.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
-                      "No saved accounts yet. Log in once and it will appear here.",
+                      getTranslated(
+                        context,
+                        'No saved accounts yet. Log in once and it will appear here.',
+                      ),
                     ),
                   )
                 else
@@ -147,18 +155,24 @@ class _RootScreenState extends State<RootScreen> {
                         final removed = await showDialog<bool>(
                           context: context,
                           builder: (_) => AlertDialog(
-                            title: const Text("Remove account?"),
+                            title: Text(
+                              getTranslated(context, 'Remove account?'),
+                            ),
                             content: Text(
-                              "Remove ${a.displayName ?? a.identifier} from this device?",
+                              getTranslatedWithArgs(
+                                context,
+                                'Remove {name} from this device?',
+                                {'name': a.displayName ?? a.identifier},
+                              ),
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context, false),
-                                child: const Text("Cancel"),
+                                child: Text(getTranslated(context, 'Cancel')),
                               ),
                               TextButton(
                                 onPressed: () => Navigator.pop(context, true),
-                                child: const Text("Remove"),
+                                child: Text(getTranslated(context, 'Remove')),
                               ),
                             ],
                           ),
@@ -178,7 +192,7 @@ class _RootScreenState extends State<RootScreen> {
                 // ✅ Add account (DON'T sign out first)
                 ListTile(
                   leading: const Icon(Icons.person_add_alt_1_rounded),
-                  title: const Text("Add account"),
+                  title: Text(getTranslated(context, 'Add account')),
                   onTap: () async {
                     Navigator.pop(context);
 
@@ -225,18 +239,18 @@ class _RootScreenState extends State<RootScreen> {
           setState(() => _index = i);
         },
         items: [
-          const BottomNavigationBarItem(
+          BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
             activeIcon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Monthly',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_bag_outlined),
-            activeIcon: Icon(Icons.shopping_bag),
-            label: 'Other',
+            label: getTranslated(context, 'Monthly'),
           ),
           BottomNavigationBarItem(
-            label: 'Accounts',
+            icon: Icon(Icons.shopping_bag_outlined),
+            activeIcon: Icon(Icons.shopping_bag),
+            label: getTranslated(context, 'Other'),
+          ),
+          BottomNavigationBarItem(
+            label: getTranslated(context, 'Accounts'),
             icon: GestureDetector(
               onLongPress: _showAccountSwitcher,
               child: const Icon(Icons.switch_account_outlined),

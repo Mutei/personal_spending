@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../localization/language_constants.dart';
 import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
 
@@ -12,6 +13,9 @@ class SpendingEntry {
   final String? bankAccountId;
   final int? qty;
   final String? category; // for analytics
+  final bool createdByRecurring;
+  final String? recurringPaymentId;
+  final String? recurringOccurrenceKey;
 
   SpendingEntry({
     required this.amount,
@@ -20,6 +24,9 @@ class SpendingEntry {
     this.bankAccountId,
     this.qty,
     this.category,
+    this.createdByRecurring = false,
+    this.recurringPaymentId,
+    this.recurringOccurrenceKey,
   });
 
   Map<String, dynamic> toJson() => {
@@ -29,6 +36,9 @@ class SpendingEntry {
     'bankAccountId': bankAccountId,
     'qty': qty,
     'category': category,
+    'createdByRecurring': createdByRecurring,
+    'recurringPaymentId': recurringPaymentId,
+    'recurringOccurrenceKey': recurringOccurrenceKey,
   };
 
   factory SpendingEntry.fromJson(Map<String, dynamic> json) => SpendingEntry(
@@ -38,6 +48,9 @@ class SpendingEntry {
     bankAccountId: json['bankAccountId'] as String?,
     qty: json['qty'] != null ? (json['qty'] as num).toInt() : null,
     category: json['category'] as String?,
+    createdByRecurring: (json['createdByRecurring'] as bool?) ?? false,
+    recurringPaymentId: json['recurringPaymentId'] as String?,
+    recurringOccurrenceKey: json['recurringOccurrenceKey'] as String?,
   );
 }
 
@@ -51,6 +64,39 @@ class CategorySpendingRecord {
     required this.index,
     required this.entry,
   });
+}
+
+class DailyBudgetAdjustment {
+  final DateTime date;
+  final DateTime previousDate;
+  final double previousAllowance;
+  final double previousSpent;
+  final double currentAllowance;
+  final double cumulativeBudget;
+  final double cumulativeSpent;
+  final double baseDailyBudget;
+  final double remainingBudget;
+  final int remainingDays;
+
+  const DailyBudgetAdjustment({
+    required this.date,
+    required this.previousDate,
+    required this.previousAllowance,
+    required this.previousSpent,
+    required this.currentAllowance,
+    required this.cumulativeBudget,
+    required this.cumulativeSpent,
+    required this.baseDailyBudget,
+    required this.remainingBudget,
+    required this.remainingDays,
+  });
+
+  bool get hadNoSpendingYesterday => previousSpent <= 0;
+  bool get overspentYesterday => previousSpent > previousAllowance;
+  bool get allowanceIncreased => currentAllowance > previousAllowance;
+  double get cumulativeDifference => cumulativeBudget - cumulativeSpent;
+  bool get isOverBudget => cumulativeDifference < 0;
+  bool get isUnderBudget => cumulativeDifference > 0;
 }
 
 /// A single income entry (salary, bonus, side income, etc.)
@@ -162,26 +208,34 @@ class NotificationPreferences {
   }
 }
 
-/// Monthly recurring payments like rent, gym, subscriptions
+enum RecurringFrequency { monthly, weekly }
+
+/// Recurring payments like rent, gym, subscriptions
 class RecurringPayment {
   final String id; // local id
   final String title;
   final double amount;
   final int dayOfMonth; // 1..31
+  final RecurringFrequency frequency;
+  final DateTime startDate;
   final String? category;
   final String? bank;
   final String? bankAccountId;
   final bool autoAdd; // if true, auto-add spending on due day
+  final List<String> processedOccurrenceKeys;
 
   RecurringPayment({
     required this.id,
     required this.title,
     required this.amount,
     required this.dayOfMonth,
+    this.frequency = RecurringFrequency.monthly,
+    required this.startDate,
     this.category,
     this.bank,
     this.bankAccountId,
     this.autoAdd = false,
+    this.processedOccurrenceKeys = const <String>[],
   });
 
   Map<String, dynamic> toJson() => {
@@ -189,10 +243,13 @@ class RecurringPayment {
     'title': title,
     'amount': amount,
     'dayOfMonth': dayOfMonth,
+    'frequency': frequency.name,
+    'startDate': startDate.toIso8601String(),
     'category': category,
     'bank': bank,
     'bankAccountId': bankAccountId,
     'autoAdd': autoAdd,
+    'processedOccurrenceKeys': processedOccurrenceKeys,
   };
 
   factory RecurringPayment.fromJson(Map<String, dynamic> json) =>
@@ -201,11 +258,51 @@ class RecurringPayment {
         title: json['title'] as String,
         amount: (json['amount'] ?? 0).toDouble(),
         dayOfMonth: (json['dayOfMonth'] as num).toInt(),
+        frequency: RecurringFrequency.values.firstWhere(
+          (value) => value.name == (json['frequency'] as String?),
+          orElse: () => RecurringFrequency.monthly,
+        ),
+        startDate: json['startDate'] != null
+            ? DateTime.parse(json['startDate'] as String)
+            : DateTime.now(),
         category: json['category'] as String?,
         bank: json['bank'] as String?,
         bankAccountId: json['bankAccountId'] as String?,
         autoAdd: (json['autoAdd'] as bool?) ?? false,
+        processedOccurrenceKeys:
+            (json['processedOccurrenceKeys'] as List<dynamic>? ?? const [])
+                .whereType<String>()
+                .toList(),
       );
+
+  RecurringPayment copyWith({
+    String? id,
+    String? title,
+    double? amount,
+    int? dayOfMonth,
+    RecurringFrequency? frequency,
+    DateTime? startDate,
+    String? category,
+    String? bank,
+    String? bankAccountId,
+    bool? autoAdd,
+    List<String>? processedOccurrenceKeys,
+  }) {
+    return RecurringPayment(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      amount: amount ?? this.amount,
+      dayOfMonth: dayOfMonth ?? this.dayOfMonth,
+      frequency: frequency ?? this.frequency,
+      startDate: startDate ?? this.startDate,
+      category: category ?? this.category,
+      bank: bank ?? this.bank,
+      bankAccountId: bankAccountId ?? this.bankAccountId,
+      autoAdd: autoAdd ?? this.autoAdd,
+      processedOccurrenceKeys:
+          processedOccurrenceKeys ?? this.processedOccurrenceKeys,
+    );
+  }
 }
 
 class SpendingProvider extends ChangeNotifier {
@@ -377,8 +474,7 @@ class SpendingProvider extends ChangeNotifier {
   NotificationPreferences get notificationPreferences =>
       _notificationPreferences;
 
-  // simple daily allowance
-  double get dailyAllowance => _monthlyBudget > 0 ? _monthlyBudget / 30 : 0;
+  double get dailyAllowance => getDailyAllowanceForDate(DateTime.now());
 
   // --------------------------------------------------
   // load all LOCAL data
@@ -420,6 +516,9 @@ class SpendingProvider extends ChangeNotifier {
               bankAccountId: entry.bankAccountId,
               qty: entry.qty != null ? _effectiveQty(entry.qty) : 1,
               category: _canonicalizeCategory(entry.category),
+              createdByRecurring: entry.createdByRecurring,
+              recurringPaymentId: entry.recurringPaymentId,
+              recurringOccurrenceKey: entry.recurringOccurrenceKey,
             );
           }).toList();
         }
@@ -478,10 +577,13 @@ class SpendingProvider extends ChangeNotifier {
               title: rp.title,
               amount: rp.amount,
               dayOfMonth: rp.dayOfMonth,
+              frequency: rp.frequency,
+              startDate: _dateOnly(rp.startDate),
               category: _canonicalizeCategory(rp.category),
               bank: rp.bank,
               bankAccountId: rp.bankAccountId,
               autoAdd: rp.autoAdd,
+              processedOccurrenceKeys: rp.processedOccurrenceKeys,
             );
           }).toList(),
         );
@@ -585,6 +687,22 @@ class SpendingProvider extends ChangeNotifier {
               ),
             );
         }
+        final recurringPaymentsRaw = meta['recurringPayments'];
+        if (recurringPaymentsRaw is List) {
+          _recurringPayments
+            ..clear()
+            ..addAll(
+              recurringPaymentsRaw.whereType<Map>().map((e) {
+                final payment = RecurringPayment.fromJson(
+                  Map<String, dynamic>.from(e),
+                );
+                return payment.copyWith(
+                  startDate: _dateOnly(payment.startDate),
+                  category: _canonicalizeCategory(payment.category),
+                );
+              }),
+            );
+        }
       }
 
       final days = await FirestoreService.instance.getAllDays(uid);
@@ -602,6 +720,9 @@ class SpendingProvider extends ChangeNotifier {
             bankAccountId: entry.bankAccountId,
             qty: entry.qty != null ? _effectiveQty(entry.qty) : 1,
             category: _canonicalizeCategory(entry.category),
+            createdByRecurring: entry.createdByRecurring,
+            recurringPaymentId: entry.recurringPaymentId,
+            recurringOccurrenceKey: entry.recurringOccurrenceKey,
           );
         }).toList();
 
@@ -717,6 +838,9 @@ class SpendingProvider extends ChangeNotifier {
     String? bankAccountId,
     int? qty,
     String? category,
+    bool createdByRecurring = false,
+    String? recurringPaymentId,
+    String? recurringOccurrenceKey,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final dateKey = _dateKey(date);
@@ -744,6 +868,9 @@ class SpendingProvider extends ChangeNotifier {
       bankAccountId: resolvedBankAccountId,
       qty: finalQty,
       category: normalizedCategory,
+      createdByRecurring: createdByRecurring,
+      recurringPaymentId: recurringPaymentId,
+      recurringOccurrenceKey: recurringOccurrenceKey,
     );
 
     if (replace) {
@@ -813,6 +940,8 @@ class SpendingProvider extends ChangeNotifier {
     required String title,
     required double amount,
     required int dayOfMonth,
+    RecurringFrequency frequency = RecurringFrequency.monthly,
+    DateTime? startDate,
     String? category,
     String? bank,
     String? bankAccountId,
@@ -836,6 +965,8 @@ class SpendingProvider extends ChangeNotifier {
         title: title,
         amount: amount,
         dayOfMonth: dayOfMonth,
+        frequency: frequency,
+        startDate: _dateOnly(startDate ?? DateTime.now()),
         category: normalizedCategory,
         bank: resolvedBank,
         bankAccountId: resolvedBankAccountId,
@@ -844,32 +975,104 @@ class SpendingProvider extends ChangeNotifier {
     );
 
     await _saveRecurringLocal(prefs);
+    await _saveRecurringRemote();
+    await _scheduleRecurringReminderNotifications();
+    notifyListeners();
+  }
+
+  Future<void> updateRecurringPayment({
+    required String id,
+    required String title,
+    required double amount,
+    required int dayOfMonth,
+    required RecurringFrequency frequency,
+    required DateTime startDate,
+    String? category,
+    String? bank,
+    String? bankAccountId,
+    bool autoAdd = false,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final index = _recurringPayments.indexWhere((payment) => payment.id == id);
+    if (index == -1) return;
+
+    final previous = _recurringPayments[index];
+    await _cancelRecurringReminderNotification(previous);
+
+    final normalizedCategory = _canonicalizeCategory(category);
+    final resolvedBankAccountId = findBankAccountId(
+      bankAccountId: bankAccountId,
+      bankName: bank,
+    );
+    final resolvedBank = resolvedBankAccountId != null
+        ? bankNameForId(resolvedBankAccountId)
+        : _trimToNull(bank);
+
+    _recurringPayments[index] = previous.copyWith(
+      title: title,
+      amount: amount,
+      dayOfMonth: dayOfMonth,
+      frequency: frequency,
+      startDate: _dateOnly(startDate),
+      category: normalizedCategory,
+      bank: resolvedBank,
+      bankAccountId: resolvedBankAccountId,
+      autoAdd: autoAdd,
+    );
+
+    await _saveRecurringLocal(prefs);
+    await _saveRecurringRemote();
+    await _scheduleRecurringReminderNotifications();
     notifyListeners();
   }
 
   Future<void> removeRecurringPayment(String id) async {
     final prefs = await SharedPreferences.getInstance();
-    _recurringPayments.removeWhere((p) => p.id == id);
+    final index = _recurringPayments.indexWhere((payment) => payment.id == id);
+    if (index == -1) return;
+
+    final payment = _recurringPayments[index];
+    await _cancelRecurringReminderNotification(payment);
+    _recurringPayments.removeAt(index);
     await _saveRecurringLocal(prefs);
+    await _saveRecurringRemote();
+    await _scheduleRecurringReminderNotifications();
     notifyListeners();
   }
 
-  /// Next due date for a given recurring payment (this month or next)
-  DateTime getNextDueDate(RecurringPayment p) {
-    final now = DateTime.now();
-    final todayDateOnly = DateTime(now.year, now.month, now.day);
+  DateTime getNextDueDate(RecurringPayment p, {DateTime? from}) {
+    final fromDate = _dateOnly(from ?? DateTime.now());
+    final startDate = _dateOnly(p.startDate);
 
-    // clamp dayOfMonth to valid for this month
-    final safeDay = p.dayOfMonth.clamp(1, 28); // simple & safe
-    DateTime due = DateTime(now.year, now.month, safeDay);
-
-    if (due.isBefore(todayDateOnly)) {
-      // next month
-      final nextMonth = DateTime(now.year, now.month + 1, 1);
-      final nmSafeDay = p.dayOfMonth.clamp(1, 28);
-      due = DateTime(nextMonth.year, nextMonth.month, nmSafeDay);
+    if (p.frequency == RecurringFrequency.weekly) {
+      if (!fromDate.isAfter(startDate)) return startDate;
+      final daysDiff = fromDate.difference(startDate).inDays;
+      final weeksOffset = (daysDiff / 7).ceil();
+      return startDate.add(Duration(days: weeksOffset * 7));
     }
-    return due;
+
+    var candidate = _buildMonthlyOccurrenceDate(
+      year: fromDate.year,
+      month: fromDate.month,
+      dayOfMonth: p.dayOfMonth,
+    );
+    if (candidate.isBefore(startDate) || candidate.isBefore(fromDate)) {
+      final nextMonth = DateTime(fromDate.year, fromDate.month + 1, 1);
+      candidate = _buildMonthlyOccurrenceDate(
+        year: nextMonth.year,
+        month: nextMonth.month,
+        dayOfMonth: p.dayOfMonth,
+      );
+    }
+    while (candidate.isBefore(startDate)) {
+      final nextMonth = DateTime(candidate.year, candidate.month + 1, 1);
+      candidate = _buildMonthlyOccurrenceDate(
+        year: nextMonth.year,
+        month: nextMonth.month,
+        dayOfMonth: p.dayOfMonth,
+      );
+    }
+    return candidate;
   }
 
   /// Upcoming recurring within [daysAhead]
@@ -894,35 +1097,233 @@ class SpendingProvider extends ChangeNotifier {
     return result;
   }
 
-  /// Auto-add recurring payments for today (only once per day)
-  Future<void> processRecurringForToday() async {
-    final prefs = await SharedPreferences.getInstance();
-    final todayKey = _dateKey(DateTime.now());
-    final lastProcessed = prefs.getString('recurring_last_processed');
+  Future<void> processRecurringPayments({DateTime? now}) async {
+    final currentDate = _dateOnly(now ?? DateTime.now());
+    final generatedToday = <RecurringPayment>[];
+    final generatedMissed = <RecurringPayment>[];
+    var changed = false;
 
-    if (lastProcessed == todayKey) {
-      // already processed today
-      return;
+    for (var index = 0; index < _recurringPayments.length; index++) {
+      final payment = _recurringPayments[index];
+      final dueOccurrences = _dueOccurrencesUpTo(payment, currentDate);
+      final processedKeys = payment.processedOccurrenceKeys.toSet();
+
+      for (final dueDate in dueOccurrences) {
+        final occurrenceKey = _dateKey(dueDate);
+        if (processedKeys.contains(occurrenceKey)) continue;
+
+        if (_hasRecurringOccurrenceRecorded(payment, dueDate, occurrenceKey)) {
+          processedKeys.add(occurrenceKey);
+          changed = true;
+          continue;
+        }
+
+        if (payment.autoAdd) {
+          await addSpendingForDate(
+            dueDate,
+            payment.amount,
+            item: payment.title,
+            bank: payment.bank,
+            bankAccountId: payment.bankAccountId,
+            category: payment.category,
+            qty: 1,
+            createdByRecurring: true,
+            recurringPaymentId: payment.id,
+            recurringOccurrenceKey: occurrenceKey,
+          );
+          if (_isSameDate(dueDate, currentDate)) {
+            generatedToday.add(payment);
+          } else {
+            generatedMissed.add(payment);
+          }
+          processedKeys.add(occurrenceKey);
+          changed = true;
+        }
+      }
+
+      _recurringPayments[index] = payment.copyWith(
+        processedOccurrenceKeys: processedKeys.toList()..sort(),
+      );
     }
 
-    final now = DateTime.now();
-    final todayDay = now.day;
+    if (changed) {
+      final prefs = await SharedPreferences.getInstance();
+      await _saveRecurringLocal(prefs);
+      await _saveRecurringRemote();
+    }
 
-    for (final p in _recurringPayments) {
-      if (p.dayOfMonth == todayDay && p.autoAdd) {
-        await addSpendingForDate(
-          now,
-          p.amount,
-          item: p.title,
-          bank: p.bank,
-          bankAccountId: p.bankAccountId,
-          category: p.category, // already canonical
-          qty: 1, // ✅ always valid
-        );
+    await _scheduleRecurringReminderNotifications(referenceDate: currentDate);
+    await _notifyRecurringProcessingResults(
+      generatedToday: generatedToday,
+      generatedMissed: generatedMissed,
+      referenceDate: currentDate,
+    );
+    notifyListeners();
+  }
+
+  Future<void> processRecurringForToday() async {
+    await processRecurringPayments();
+  }
+
+  DateTime _buildMonthlyOccurrenceDate({
+    required int year,
+    required int month,
+    required int dayOfMonth,
+  }) {
+    final lastDayOfMonth = DateTime(year, month + 1, 0).day;
+    final safeDay = dayOfMonth.clamp(1, lastDayOfMonth);
+    return DateTime(year, month, safeDay);
+  }
+
+  List<DateTime> _dueOccurrencesUpTo(
+    RecurringPayment payment,
+    DateTime upToDate,
+  ) {
+    final results = <DateTime>[];
+    final startDate = _dateOnly(payment.startDate);
+    final normalizedEnd = _dateOnly(upToDate);
+    if (startDate.isAfter(normalizedEnd)) return results;
+
+    if (payment.frequency == RecurringFrequency.weekly) {
+      var due = startDate;
+      while (!due.isAfter(normalizedEnd)) {
+        results.add(due);
+        due = due.add(const Duration(days: 7));
+      }
+      return results;
+    }
+
+    var cursor = DateTime(startDate.year, startDate.month, 1);
+    final endMonth = DateTime(normalizedEnd.year, normalizedEnd.month, 1);
+    while (!cursor.isAfter(endMonth)) {
+      final due = _buildMonthlyOccurrenceDate(
+        year: cursor.year,
+        month: cursor.month,
+        dayOfMonth: payment.dayOfMonth,
+      );
+      if (!due.isBefore(startDate) && !due.isAfter(normalizedEnd)) {
+        results.add(due);
+      }
+      cursor = DateTime(cursor.year, cursor.month + 1, 1);
+    }
+    return results;
+  }
+
+  String _recurringReminderNotificationKey(
+    RecurringPayment payment,
+    DateTime dueDate,
+  ) => 'recurring-reminder-${payment.id}-${_dateKey(dueDate)}';
+
+  bool _hasRecurringOccurrenceRecorded(
+    RecurringPayment payment,
+    DateTime dueDate,
+    String occurrenceKey,
+  ) {
+    final entries = _dailyEntries[_dateKey(dueDate)] ?? const <SpendingEntry>[];
+    for (final entry in entries) {
+      if (entry.recurringPaymentId == payment.id &&
+          entry.recurringOccurrenceKey == occurrenceKey) {
+        return true;
+      }
+      if (!entry.createdByRecurring &&
+          (entry.item ?? '').trim() == payment.title.trim() &&
+          entry.amount == payment.amount &&
+          (entry.bankAccountId ?? '') == (payment.bankAccountId ?? '') &&
+          (entry.category ?? '') == (payment.category ?? '') &&
+          (entry.qty ?? 1) == 1) {
+        return true;
       }
     }
+    return false;
+  }
 
-    await prefs.setString('recurring_last_processed', todayKey);
+  Future<void> _cancelRecurringReminderNotification(
+    RecurringPayment payment,
+  ) async {
+    final nextDueDate = getNextDueDate(payment);
+    await NotificationService.cancelNotificationByKey(
+      _recurringReminderNotificationKey(payment, nextDueDate),
+    );
+  }
+
+  Future<void> _scheduleRecurringReminderNotifications({
+    DateTime? referenceDate,
+  }) async {
+    final now = referenceDate ?? DateTime.now();
+    for (final payment in _recurringPayments) {
+      final dueDate = getNextDueDate(payment, from: now);
+      final reminderAt = DateTime(
+        dueDate.year,
+        dueDate.month,
+        dueDate.day,
+        9,
+      ).subtract(const Duration(days: 1));
+      final notificationKey = _recurringReminderNotificationKey(
+        payment,
+        dueDate,
+      );
+
+      if (reminderAt.isAfter(now)) {
+        final title = await getTranslatedForCurrentLocale(
+          'Upcoming recurring payment',
+        );
+        await NotificationService.scheduleNotification(
+          notificationKey: notificationKey,
+          title: title,
+          body:
+              '${payment.title} is due on ${_dateKey(dueDate)} for ${payment.amount.toStringAsFixed(2)} SAR.',
+          scheduledAt: reminderAt,
+          payload: notificationKey,
+        );
+      } else {
+        await NotificationService.cancelNotificationByKey(notificationKey);
+      }
+    }
+  }
+
+  Future<void> _notifyRecurringProcessingResults({
+    required List<RecurringPayment> generatedToday,
+    required List<RecurringPayment> generatedMissed,
+    required DateTime referenceDate,
+  }) async {
+    if (generatedToday.isEmpty && generatedMissed.isEmpty) return;
+
+    if (generatedToday.isNotEmpty) {
+      final title = await getTranslatedForCurrentLocale(
+        generatedToday.length == 1
+            ? 'Recurring payment added'
+            : 'Recurring payments added',
+      );
+      final body = generatedToday.length == 1
+          ? '${generatedToday.first.title} was added automatically for ${_dateKey(referenceDate)}.'
+          : '${generatedToday.length} recurring payments were added automatically for ${_dateKey(referenceDate)}.';
+      await NotificationService.showNotification(
+        notificationKey: 'recurring-processed-today-${_dateKey(referenceDate)}',
+        title: title,
+        body: body,
+      );
+    }
+
+    if (generatedMissed.isNotEmpty) {
+      final title = await getTranslatedForCurrentLocale(
+        generatedMissed.length == 1
+            ? 'Missed recurring payment processed'
+            : 'Missed recurring payments processed',
+      );
+      final body = generatedMissed.length == 1
+          ? '${generatedMissed.first.title} was added from a missed due date.'
+          : '${generatedMissed.length} missed recurring payments were added automatically.';
+      await NotificationService.showNotification(
+        notificationKey:
+            'recurring-processed-missed-${_dateKey(referenceDate)}',
+        title: title,
+        body: body,
+      );
+    }
+  }
+
+  Future<void> _saveRecurringRemote() async {
+    await _saveMetaRemote();
   }
 
   // --------------------------------------------------
@@ -1106,10 +1507,14 @@ class SpendingProvider extends ChangeNotifier {
 
     _periodTotal = _calculateTotalForPeriod();
 
-    if (dailyAllowance > 0 && newTotal > dailyAllowance) {
+    final affectedDate = _tryParseDateKey(dateKey);
+    final allowance = affectedDate == null
+        ? 0.0
+        : getDailyAllowanceForDate(affectedDate);
+    if (allowance > 0 && newTotal > allowance) {
       await NotificationService.showOverSpendNotification(
         todayTotal: newTotal,
-        allowed: dailyAllowance,
+        allowed: allowance,
       );
     }
 
@@ -1215,14 +1620,33 @@ class SpendingProvider extends ChangeNotifier {
     final normalized = category.trim().toLowerCase();
     final records = <CategorySpendingRecord>[];
 
+    if (_periodStart == null || _periodEnd == null) {
+      return records;
+    }
+
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+
     _dailyEntries.forEach((dateKey, entries) {
       final date = _tryParseDateKey(dateKey);
       if (date == null) return;
 
+      final dateOnly = _dateOnly(date);
+
+      if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) {
+        return;
+      }
+
       for (var i = 0; i < entries.length; i++) {
         final entry = entries[i];
-        if (categoryLabelOf(entry).toLowerCase() != normalized) continue;
-        records.add(CategorySpendingRecord(date: date, index: i, entry: entry));
+
+        if (categoryLabelOf(entry).toLowerCase() != normalized) {
+          continue;
+        }
+
+        records.add(
+          CategorySpendingRecord(date: dateOnly, index: i, entry: entry),
+        );
       }
     });
 
@@ -1230,11 +1654,14 @@ class SpendingProvider extends ChangeNotifier {
       final byDate = sortDescending
           ? b.date.compareTo(a.date)
           : a.date.compareTo(b.date);
+
       if (byDate != 0) return byDate;
+
       return sortDescending
           ? b.index.compareTo(a.index)
           : a.index.compareTo(b.index);
     });
+
     return records;
   }
 
@@ -1251,18 +1678,12 @@ class SpendingProvider extends ChangeNotifier {
     final List<DateTime> days = [];
     if (_periodStart == null || _periodEnd == null) return days;
     _dailySpendings.forEach((dateStr, amount) {
-      final parts = dateStr.split('-');
-      if (parts.length == 3) {
-        final d = DateTime(
-          int.parse(parts[0]),
-          int.parse(parts[1]),
-          int.parse(parts[2]),
-        );
-        if (!_isBefore(d, _periodStart!) && !_isAfter(d, _periodEnd!)) {
-          if (dailyAllowance > 0 && amount > dailyAllowance) {
-            days.add(d);
-          }
-        }
+      final d = _tryParseDateKey(dateStr);
+      if (d == null) return;
+      if (_isBefore(d, _periodStart!) || _isAfter(d, _periodEnd!)) return;
+      final allowance = getDailyAllowanceForDate(d);
+      if (allowance > 0 && amount > allowance) {
+        days.add(d);
       }
     });
     return days;
@@ -1407,28 +1828,108 @@ class SpendingProvider extends ChangeNotifier {
   }
 
   int getDaysLeftInPeriod() {
+    return getRemainingDaysInPeriod(DateTime.now(), includeCurrentDay: false);
+  }
+
+  int getRemainingDaysInPeriod(DateTime date, {bool includeCurrentDay = true}) {
     if (_periodStart == null || _periodEnd == null) return 0;
 
-    final now = DateTime.now();
-    final todayDateOnly = DateTime(now.year, now.month, now.day);
-    final end = _periodEnd!;
-    final periodEndDateOnly = DateTime(end.year, end.month, end.day);
+    final dateOnly = _dateOnly(date);
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
 
-    if (todayDateOnly.isAfter(periodEndDateOnly)) return 0;
-    if (todayDateOnly.isBefore(_periodStart!)) {
-      return periodEndDateOnly
-              .difference(
-                DateTime(
-                  _periodStart!.year,
-                  _periodStart!.month,
-                  _periodStart!.day,
-                ),
-              )
-              .inDays +
-          1;
+    if (dateOnly.isAfter(end)) return 0;
+
+    final effectiveStart = dateOnly.isBefore(start) ? start : dateOnly;
+    final remaining = end.difference(effectiveStart).inDays;
+    return includeCurrentDay ? remaining + 1 : remaining;
+  }
+
+  double getRemainingBudgetForDate(DateTime date) {
+    if (_monthlyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return 0;
     }
 
-    return periodEndDateOnly.difference(todayDateOnly).inDays;
+    final dateOnly = _dateOnly(date);
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    if (dateOnly.isAfter(end)) {
+      return _monthlyBudget -
+          _calculateSpentBeforeDate(end.add(const Duration(days: 1)));
+    }
+
+    final effectiveDate = dateOnly.isBefore(start) ? start : dateOnly;
+    return _monthlyBudget - _calculateSpentBeforeDate(effectiveDate);
+  }
+
+  int getTotalDaysInPeriod() {
+    if (_periodStart == null || _periodEnd == null) return 0;
+
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    return end.difference(start).inDays + 1;
+  }
+
+  double getBaseDailyBudget() {
+    if (_monthlyBudget <= 0) return 0;
+
+    final totalDays = getTotalDaysInPeriod();
+    if (totalDays <= 0) return 0;
+    return _monthlyBudget / totalDays;
+  }
+
+  double getDailyAllowanceForDate(DateTime date) {
+    if (_monthlyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return 0;
+    }
+
+    final targetDate = _dateOnly(date);
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    if (targetDate.isBefore(start) || targetDate.isAfter(end)) return 0;
+
+    final baseDailyBudget = getBaseDailyBudget();
+    if (baseDailyBudget == 0) return 0;
+
+    var allowance = baseDailyBudget;
+    var cursor = start;
+
+    while (cursor.isBefore(targetDate)) {
+      final spent = getSpendingForDate(cursor);
+      allowance = baseDailyBudget + (allowance - spent);
+      cursor = cursor.add(const Duration(days: 1));
+    }
+
+    return allowance;
+  }
+
+  DailyBudgetAdjustment? getDailyBudgetAdjustmentForDate(DateTime date) {
+    if (_monthlyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return null;
+    }
+
+    final dateOnly = _dateOnly(date);
+    final previousDate = dateOnly.subtract(const Duration(days: 1));
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+
+    if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) return null;
+    if (!previousDate.isBefore(start)) {
+      return DailyBudgetAdjustment(
+        date: dateOnly,
+        previousDate: previousDate,
+        previousAllowance: getDailyAllowanceForDate(previousDate),
+        previousSpent: getSpendingForDate(previousDate),
+        currentAllowance: getDailyAllowanceForDate(dateOnly),
+        cumulativeBudget: getCumulativeBudgetForDate(previousDate),
+        cumulativeSpent: getCumulativeSpendingForDate(previousDate),
+        baseDailyBudget: getBaseDailyBudget(),
+        remainingBudget: getRemainingBudgetForDate(dateOnly),
+        remainingDays: getRemainingDaysInPeriod(dateOnly),
+      );
+    }
+
+    return null;
   }
 
   List<String> getForecastMessages() {
@@ -1561,6 +2062,55 @@ class SpendingProvider extends ChangeNotifier {
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  double _calculateSpentBeforeDate(DateTime date) {
+    if (_periodStart == null || _periodEnd == null) return 0;
+
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    final cutoff = _dateOnly(date);
+    double total = 0;
+
+    _dailySpendings.forEach((dateStr, amount) {
+      final parsed = _tryParseDateKey(dateStr);
+      if (parsed == null) return;
+      final day = _dateOnly(parsed);
+      if (day.isBefore(start) || day.isAfter(end) || !day.isBefore(cutoff)) {
+        return;
+      }
+      total += amount;
+    });
+
+    return total;
+  }
+
+  double getCumulativeSpendingForDate(DateTime date) {
+    final dateOnly = _dateOnly(date);
+    return _calculateSpentBeforeDate(dateOnly.add(const Duration(days: 1)));
+  }
+
+  double getCumulativeBudgetForDate(DateTime date) {
+    if (_monthlyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return 0;
+    }
+
+    final dateOnly = _dateOnly(date);
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    if (dateOnly.isBefore(start)) return 0;
+
+    final effectiveEnd = dateOnly.isAfter(end) ? end : dateOnly;
+    final elapsedDays = effectiveEnd.difference(start).inDays + 1;
+    if (elapsedDays <= 0) return 0;
+
+    return getBaseDailyBudget() * elapsedDays;
+  }
 
   DateTime? _tryParseDateKey(String dateKey) {
     final parts = dateKey.split('-');
@@ -1737,6 +2287,7 @@ class SpendingProvider extends ChangeNotifier {
       periodEnd: _periodEnd,
       bankAccounts: _bankAccounts.map((e) => e.toJson()).toList(),
       notificationPreferences: _notificationPreferences.toJson(),
+      recurringPayments: _recurringPayments.map((e) => e.toJson()).toList(),
     );
   }
 

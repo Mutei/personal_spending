@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../providers/other_spending_provider.dart';
 import '../providers/spending_provider.dart';
 import '../services/export_service.dart';
+import '../widgets/common/app_loading_skeletons.dart';
 
 class DailyReportPreviewScreen extends StatefulWidget {
   final DateTime date;
@@ -30,6 +32,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
   Future<_DailyReportPreviewState> _generateReport() async {
     final spendingProvider = context.read<SpendingProvider>();
     final otherProvider = context.read<OtherSpendingProvider>();
+    await ExportService.instance.prepareLocale();
     final reportData = ExportService.instance.buildDailySpendingReportData(
       spendingProvider: spendingProvider,
       otherProvider: otherProvider,
@@ -51,19 +54,19 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Daily Report'),
+        title: Text(getTranslated(context, 'Daily Report')),
         actions: [
           FutureBuilder<_DailyReportPreviewState>(
             future: _reportFuture,
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox.shrink();
               return IconButton(
-                tooltip: 'Save or share PDF',
+                tooltip: getTranslated(context, 'Save or share PDF'),
                 icon: const Icon(Icons.ios_share_rounded),
                 onPressed: () async {
                   await ExportService.instance.shareGeneratedFile(
                     snapshot.data!.file,
-                    text: 'Daily spending report PDF',
+                    text: getTranslated(context, 'Daily spending report PDF'),
                   );
                 },
               );
@@ -75,7 +78,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
         future: _reportFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const DailyReportLoadingSkeleton();
           }
 
           if (snapshot.hasError || !snapshot.hasData) {
@@ -83,7 +86,10 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Unable to generate the daily report preview right now.',
+                  getTranslated(
+                    context,
+                    'Unable to generate the daily report preview right now.',
+                  ),
                   style: text.bodyLarge,
                   textAlign: TextAlign.center,
                 ),
@@ -140,7 +146,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Total Spent',
+                              getTranslated(context, 'Total Spent'),
                               style: text.bodySmall?.copyWith(
                                 color: cs.onPrimary.withValues(alpha: 0.9),
                               ),
@@ -164,14 +170,14 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                   children: [
                     Expanded(
                       child: _SummaryStatCard(
-                        label: 'Transactions',
+                        label: getTranslated(context, 'Transactions'),
                         value: '${reportData.rows.length}',
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _SummaryStatCard(
-                        label: 'Categories',
+                        label: getTranslated(context, 'Categories'),
                         value: '${reportData.categories.length}',
                       ),
                     ),
@@ -185,7 +191,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Category totals',
+                          getTranslated(context, 'Category totals'),
                           style: text.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -207,7 +213,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                'All categories total',
+                                getTranslated(context, 'All categories total'),
                                 style: text.titleSmall?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -233,7 +239,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Transaction preview',
+                          getTranslated(context, 'Transaction preview'),
                           style: text.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -280,7 +286,7 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                                       row.qty != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Bank: ${row.bank.isEmpty ? 'N/A' : row.bank} • Qty: ${row.qty ?? 1}',
+                                      '${getTranslated(context, 'Bank')}: ${row.bank.isEmpty ? getTranslated(context, 'N/A') : row.bank} • ${getTranslated(context, 'Qty')}: ${row.qty ?? 1}',
                                       style: text.bodySmall,
                                     ),
                                   ],
@@ -298,11 +304,11 @@ class _DailyReportPreviewScreenState extends State<DailyReportPreviewScreen> {
                   onPressed: () async {
                     await ExportService.instance.shareGeneratedFile(
                       report.file,
-                      text: 'Daily spending report PDF',
+                      text: getTranslated(context, 'Daily spending report PDF'),
                     );
                   },
                   icon: const Icon(Icons.download_rounded),
-                  label: const Text('Save or Share PDF'),
+                  label: Text(getTranslated(context, 'Save or Share PDF')),
                 ),
               ],
             ),

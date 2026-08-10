@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../services/app_lock_service.dart';
 
 class LockScreen extends StatelessWidget {
@@ -14,12 +15,16 @@ class LockScreen extends StatelessWidget {
       body: Center(
         child: ElevatedButton.icon(
           icon: const Icon(Icons.lock_open),
-          label: const Text('Unlock App'),
+          label: Text(getTranslated(context, 'Unlock App')),
           onPressed: () async {
             final ok = await lock.authenticate();
             if (!ok && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Authentication failed')),
+                SnackBar(
+                  content: Text(
+                    getTranslated(context, 'Authentication failed'),
+                  ),
+                ),
               );
             }
           },

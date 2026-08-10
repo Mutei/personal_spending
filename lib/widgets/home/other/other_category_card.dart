@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import '../../../localization/language_constants.dart';
 import '../../../providers/other_spending_provider.dart';
 
 class OtherCategoryCard extends StatelessWidget {
@@ -71,8 +73,8 @@ class OtherCategoryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${entries.length} payments'
-                    '${latest == null ? '' : ' • last ${fmt.format(latest)}'}',
+                    '${entries.length} ${getTranslated(context, 'payments')}'
+                    '${latest == null ? '' : ' • ${getTranslated(context, 'last')} ${fmt.format(latest)}'}',
                     style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
@@ -134,7 +136,7 @@ class OtherCategoryCard extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: "Delete category",
+                      tooltip: getTranslated(context, 'Delete category'),
                       onPressed: () {
                         Navigator.pop(ctx);
                         onDeleteCategory();

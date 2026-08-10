@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../providers/spending_provider.dart';
 import '../services/export_service.dart';
 import '../sheets/home_sheets.dart';
@@ -31,7 +32,7 @@ class CategoryDetailsScreen extends StatelessWidget {
         title: Text(category),
         actions: [
           IconButton(
-            tooltip: 'Export PDF',
+            tooltip: getTranslated(context, 'Export PDF'),
             onPressed: records.isEmpty
                 ? null
                 : () async {
@@ -39,8 +40,10 @@ class CategoryDetailsScreen extends StatelessWidget {
                       final reportTitle = await HomeSheets.promptForReportTitle(
                         context,
                         initialTitle: '$category Spending Report',
-                        helperText:
-                            'This custom title will be shown prominently in the exported PDF.',
+                        helperText: getTranslated(
+                          context,
+                          'This custom title will be shown prominently in the exported PDF.',
+                        ),
                       );
                       if (reportTitle == null || !context.mounted) {
                         return;
@@ -52,15 +55,28 @@ class CategoryDetailsScreen extends StatelessWidget {
                       );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Category report exported as PDF'),
+                          SnackBar(
+                            content: Text(
+                              getTranslated(
+                                context,
+                                'Category report exported as PDF',
+                              ),
+                            ),
                           ),
                         );
                       }
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Export failed: $e')),
+                          SnackBar(
+                            content: Text(
+                              getTranslatedWithArgs(
+                                context,
+                                'Export failed: {error}',
+                                {'error': '$e'},
+                              ),
+                            ),
+                          ),
                         );
                       }
                     }
@@ -84,7 +100,10 @@ class CategoryDetailsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'No spending records remain in this category.',
+                        getTranslated(
+                          context,
+                          'No spending records remain in this category.',
+                        ),
                         textAlign: TextAlign.center,
                         style: text.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
@@ -107,17 +126,17 @@ class CategoryDetailsScreen extends StatelessWidget {
                           runSpacing: 12,
                           children: [
                             _MetricChip(
-                              label: 'Transactions',
+                              label: getTranslated(context, 'Transactions'),
                               value: '${records.length}',
                               icon: Icons.receipt_long_rounded,
                             ),
                             _MetricChip(
-                              label: 'Total spent',
+                              label: getTranslated(context, 'Total spent'),
                               value: totalSpent.toStringAsFixed(2),
                               icon: Icons.account_balance_wallet_rounded,
                             ),
                             _MetricChip(
-                              label: 'Average',
+                              label: getTranslated(context, 'Average'),
                               value: averageSpent.toStringAsFixed(2),
                               icon: Icons.bar_chart_rounded,
                             ),
@@ -126,7 +145,7 @@ class CategoryDetailsScreen extends StatelessWidget {
                         if (earliestDate != null && latestDate != null) ...[
                           const SizedBox(height: 14),
                           Text(
-                            'History: ${DateFormat.yMMMd().format(earliestDate)} - ${DateFormat.yMMMd().format(latestDate)}',
+                            '${getTranslated(context, 'History')}: ${DateFormat.yMMMd().format(earliestDate)} - ${DateFormat.yMMMd().format(latestDate)}',
                             style: text.bodyMedium?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -142,7 +161,7 @@ class CategoryDetailsScreen extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Spending history',
+                          getTranslated(context, 'Spending history'),
                           style: text.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -236,11 +255,12 @@ class _CategoryRecordCard extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final title = entry.item?.trim().isNotEmpty == true
         ? entry.item!.trim()
-        : 'Spending';
+        : getTranslated(context, 'Spending');
     final subtitleParts = <String>[
       DateFormat.yMMMd().format(record.date),
       if (entry.bank?.trim().isNotEmpty == true) entry.bank!.trim(),
-      if (entry.qty != null && entry.qty! > 1) 'Qty ${entry.qty}',
+      if (entry.qty != null && entry.qty! > 1)
+        '${getTranslated(context, 'Qty')} ${entry.qty}',
     ];
 
     return Padding(
@@ -334,7 +354,7 @@ class _CategoryRecordCard extends StatelessWidget {
                           );
                         },
                         icon: const Icon(Icons.edit_rounded),
-                        label: const Text('Edit'),
+                        label: Text(getTranslated(context, 'Edit')),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -345,22 +365,32 @@ class _CategoryRecordCard extends StatelessWidget {
                             context: context,
                             builder: (dialogContext) {
                               return AlertDialog(
-                                title: const Text('Delete entry?'),
+                                title: Text(
+                                  getTranslated(context, 'Delete entry?'),
+                                ),
                                 content: Text(
-                                  'Remove this spending record from $category?',
+                                  getTranslatedWithArgs(
+                                    context,
+                                    'Remove this spending record from {category}?',
+                                    {'category': category},
+                                  ),
                                 ),
                                 actions: [
                                   TextButton(
                                     onPressed: () {
                                       Navigator.pop(dialogContext, false);
                                     },
-                                    child: const Text('Cancel'),
+                                    child: Text(
+                                      getTranslated(context, 'Cancel'),
+                                    ),
                                   ),
                                   FilledButton(
                                     onPressed: () {
                                       Navigator.pop(dialogContext, true);
                                     },
-                                    child: const Text('Delete'),
+                                    child: Text(
+                                      getTranslated(context, 'Delete'),
+                                    ),
                                   ),
                                 ],
                               );
@@ -378,8 +408,13 @@ class _CategoryRecordCard extends StatelessWidget {
 
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Entry deleted successfully'),
+                              SnackBar(
+                                content: Text(
+                                  getTranslated(
+                                    context,
+                                    'Entry deleted successfully',
+                                  ),
+                                ),
                               ),
                             );
                           }
@@ -389,7 +424,7 @@ class _CategoryRecordCard extends StatelessWidget {
                           color: cs.error,
                         ),
                         label: Text(
-                          'Delete',
+                          getTranslated(context, 'Delete'),
                           style: TextStyle(color: cs.error),
                         ),
                       ),

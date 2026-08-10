@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../providers/notification_center_provider.dart';
 import '../providers/other_spending_provider.dart';
 import '../providers/secure_values_lock_service.dart';
@@ -17,6 +18,7 @@ import 'insights_screen.dart';
 // Reused widgets & helpers
 import '../widgets/home/home/home_main_drawer.dart';
 import '../widgets/home/home/spending_entry_tile.dart';
+import '../widgets/show_language_dialog.dart';
 import '../sheets/home_sheets.dart';
 
 enum _CategorySortOption {
@@ -50,6 +52,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ prevent calling attachUser repeatedly from build()
   String? _lastUid;
+  String? _lastNotificationSyncToken;
   _CategorySortOption _categorySortOption = _CategorySortOption.highestSpending;
 
   DateTime _selectedDate = DateTime.now();
@@ -90,6 +93,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<SpendingProvider>().processRecurringPayments();
+      return;
+    }
+
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
@@ -104,8 +112,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     Navigator.pop(context);
 
     final authSucceeded = await context.read<AppLockService>().authenticate(
-      localizedReason:
-          'Authenticate to access and update your budget information',
+      localizedReason: getTranslated(
+        context,
+        'Authenticate to access and update your budget information',
+      ),
       unlockSession: false,
     );
 
@@ -113,8 +123,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (!authSucceeded) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication required to access Set budget'),
+        SnackBar(
+          content: Text(
+            getTranslated(
+              context,
+              'Authentication required to access Set budget',
+            ),
+          ),
         ),
       );
       return;
@@ -162,24 +177,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final upcomingRecurring = provider.getUpcomingRecurringPayments();
 
     final user = auth.currentUser;
-    final email = user?.email ?? 'Guest';
-    final displayName = user?.displayName ?? 'User';
+    final email = user?.email ?? getTranslated(context, 'Guest');
+    final displayName = user?.displayName ?? getTranslated(context, 'User');
     final appLock = context.watch<AppLockService>();
     final valuesLocked = context.watch<SecureValuesLockService>().isLocked;
     final bankAccounts = provider.bankAccounts;
     final bankBalanceTotal = provider.totalBankBalance;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<NotificationCenterProvider>().syncFromData(
-        spending: provider,
-        other: otherProvider,
-      );
-    });
+    final syncToken = [
+      provider.periodTotal.toStringAsFixed(2),
+      provider.periodIncomeTotal.toStringAsFixed(2),
+      provider.totalBankBalance.toStringAsFixed(2),
+      provider.bankAccounts.length,
+      provider.getEntriesForDate(_selectedDate).length,
+      otherProvider.totalOtherSpending.toStringAsFixed(2),
+      otherProvider.uniqueEntries.length,
+      _dateFormat.format(_selectedDate),
+    ].join('|');
+    if (_lastNotificationSyncToken != syncToken) {
+      _lastNotificationSyncToken = syncToken;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<NotificationCenterProvider>().syncFromData(
+          spending: provider,
+          other: otherProvider,
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Spending Tracker'),
+        title: Text(getTranslated(context, 'Spending Tracker')),
         centerTitle: true,
         actions: const [NotificationCenterButton()],
       ),
@@ -201,7 +229,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (!context.mounted) return;
             if (!ok) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Auth failed - lock not enabled")),
+                SnackBar(
+                  content: Text(
+                    getTranslated(context, 'Auth failed - lock not enabled'),
+                  ),
+                ),
               );
               return;
             }
@@ -210,16 +242,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             if (!context.mounted) return;
             lock.lockAgain();
 
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("App Lock Enabled")));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(getTranslated(context, 'App Lock Enabled')),
+              ),
+            );
           } else {
             await lock.setEnabled(false);
             if (!context.mounted) return;
 
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("App Lock Disabled")));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(getTranslated(context, 'App Lock Disabled')),
+              ),
+            );
           }
         },
 
@@ -233,20 +269,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Navigator.pop(context);
           HomeSheets.showExportOptionsSheet(context, provider);
         },
-        onSendDailySummary: () {
+        onSendTestNotifications: () async {
           Navigator.pop(context);
-          if (!provider.notificationPreferences.dailySummaryEnabled) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Daily summary notifications are disabled'),
-              ),
-            );
-            return;
-          }
-          provider.sendDailySummaryNotification();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Daily summary notification sent')),
-          );
+          final sent = await context
+              .read<NotificationCenterProvider>()
+              .sendTestSpendingNotifications(
+                spending: provider,
+                other: otherProvider,
+              );
+          if (!context.mounted) return;
+
+          final message = sent.isEmpty
+              ? getTranslated(
+                  context,
+                  'No spending notifications are available to send right now',
+                )
+              : getTranslatedWithArgs(
+                  context,
+                  sent.length == 1
+                      ? 'Sent {items} notification'
+                      : 'Sent {items} notifications',
+                  {'items': sent.join(' and ')},
+                );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
         },
         onNotificationPreferences: () {
           Navigator.pop(context);
@@ -258,6 +305,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onManageRecurring: () {
           Navigator.pop(context);
           HomeSheets.showRecurringPaymentsSheet(context, provider);
+        },
+        onLanguage: () {
+          Navigator.pop(context);
+          showLanguageDialog(context);
         },
         onLogout: () async {
           Navigator.pop(context);
@@ -271,27 +322,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
 
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ========= PERIOD SECTION =========
-              HomeSectionCard(
+        child: ListView(
+          key: const PageStorageKey('home-screen-scroll'),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            110 + MediaQuery.of(context).padding.bottom,
+          ),
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
+              child: HomeSectionCard(
+                key: ValueKey(provider.hasPeriod),
                 child: provider.hasPeriod
                     ? Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              "Period: ${fmt.format(provider.periodStart!)} -> ${fmt.format(provider.periodEnd!)}",
-                              style: text.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  getTranslated(context, 'Period'),
+                                  style: text.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${fmt.format(provider.periodStart!)} -> ${fmt.format(provider.periodEnd!)}',
+                                  style: text.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          TextButton(
+                          OutlinedButton(
                             onPressed: () => _pickCustomPeriod(context),
-                            child: const Text("Change"),
+                            child: Text(getTranslated(context, 'Change')),
                           ),
                         ],
                       )
@@ -299,79 +374,115 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Choose budget period",
+                            getTranslated(context, 'Choose budget period'),
                             style: text.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          Row(
+                          const SizedBox(height: 8),
+                          Text(
+                            'Set the range you want the dashboard to analyze and track.',
+                            style: text.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
                             children: [
                               ElevatedButton(
                                 onPressed: () =>
                                     provider.useCurrentMonthPeriod(),
-                                child: const Text("Use this month"),
+                                child: Text(
+                                  getTranslated(context, 'Use this month'),
+                                ),
                               ),
-                              const SizedBox(width: 10),
                               OutlinedButton(
                                 onPressed: () => _pickCustomPeriod(context),
-                                child: const Text("Custom period"),
+                                child: Text(
+                                  getTranslated(context, 'Custom period'),
+                                ),
                               ),
                             ],
                           ),
                         ],
                       ),
               ),
-
-              const SizedBox(height: 16),
-
-              // ========= DASHBOARD CARD =========
-              Container(
+            ),
+            const SizedBox(height: 16),
+            RepaintBoundary(
+              child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      cs.primary.withOpacity(0.9),
-                      cs.secondary.withOpacity(0.9),
+                      cs.primary.withValues(alpha: 0.96),
+                      cs.secondary.withValues(alpha: 0.84),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                      color: cs.primary.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: cs.primary.withValues(alpha: 0.22),
+                      blurRadius: 26,
+                      offset: const Offset(0, 14),
                     ),
                   ],
                 ),
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(22),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
                       'Period Overview',
-                      style: text.titleMedium?.copyWith(
+                      style: text.titleLarge?.copyWith(
                         color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    CircularPercentIndicator(
-                      radius: 70,
-                      lineWidth: 10,
-                      percent: percent,
-                      progressColor: Colors.amberAccent,
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      center: Text(
-                        '${(percent * 100).toStringAsFixed(0)}%',
-                        style: text.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                    const SizedBox(height: 6),
+                    Text(
+                      'A quick pulse on this period before you dive into the details.',
+                      style: text.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.82),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: CircularPercentIndicator(
+                        radius: 74,
+                        lineWidth: 12,
+                        animation: true,
+                        animateFromLastPercent: true,
+                        animationDuration: 700,
+                        curve: Curves.easeOutCubic,
+                        percent: percent,
+                        progressColor: const Color(0xFFFFD166),
+                        backgroundColor: Colors.white.withValues(alpha: 0.14),
+                        circularStrokeCap: CircularStrokeCap.round,
+                        center: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${(percent * 100).toStringAsFixed(0)}%',
+                              style: text.headlineSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              'used',
+                              style: text.bodySmall?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.82),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Row(
                       children: [
                         Expanded(
@@ -381,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             value: budget,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: _secureInfoColumn(
                             context,
@@ -389,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             value: periodTotal,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: _secureInfoColumn(
                             context,
@@ -402,537 +513,412 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-
-              if (bankAccounts.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                HomeSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.account_balance_rounded, size: 22),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "Bank balances",
-                              style: text.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            valuesLocked
-                                ? "****"
-                                : bankBalanceTotal.toStringAsFixed(2),
-                            style: text.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+            ),
+            if (bankAccounts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              HomeSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader(
+                      context,
+                      title: 'Bank balances',
+                      subtitle:
+                          'Live budget context across your saved accounts.',
+                      icon: Icons.account_balance_rounded,
+                      trailing: Text(
+                        valuesLocked
+                            ? '****'
+                            : bankBalanceTotal.toStringAsFixed(2),
+                        style: text.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      ...bankAccounts.map(
-                        (account) => Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
+                    ),
+                    const SizedBox(height: 14),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: bankAccounts.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final account = bankAccounts[index];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest.withValues(
+                              alpha: 0.38,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
                                 child: Text(
                                   account.name,
-                                  style: text.bodyMedium,
                                   overflow: TextOverflow.ellipsis,
+                                  style: text.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Text(
                                 valuesLocked
-                                    ? "****"
+                                    ? '****'
                                     : account.balance.toStringAsFixed(2),
                                 style: text.bodyMedium?.copyWith(
                                   color: account.balance >= 0
                                       ? Colors.green
                                       : Colors.red,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
                           ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (provider.hasPeriod) ...[
+              const SizedBox(height: 16),
+              HomeSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader(
+                      context,
+                      title: 'Forecast',
+                      subtitle: daysLeftInPeriod > 0
+                          ? "Based on your current pace, here's how this period may end."
+                          : 'This period has ended or is about to end.',
+                      icon: Icons.trending_up_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    _infoRow(
+                      context,
+                      label: 'Projected total',
+                      value: projectedTotal.toStringAsFixed(2),
+                    ),
+                    if (budget > 0) ...[
+                      const SizedBox(height: 10),
+                      _infoRow(
+                        context,
+                        label: 'Vs. budget',
+                        value: projectedDiff >= 0
+                            ? '+${projectedDiff.toStringAsFixed(2)}'
+                            : '-${(-projectedDiff).toStringAsFixed(2)}',
+                        valueColor: projectedDiff > 0
+                            ? Colors.red
+                            : Colors.green,
+                      ),
+                    ],
+                    if (forecastMessages.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      const Divider(),
+                      const SizedBox(height: 14),
+                      ...forecastMessages.map(
+                        (message) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _messageRow(context, message: message),
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
-              ],
-
-              // ========= FORECAST CARD =========
-              if (provider.hasPeriod) ...[
-                const SizedBox(height: 16),
-                HomeSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.trending_up, size: 22),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Forecast",
-                            style: text.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        daysLeftInPeriod > 0
-                            ? "Based on your current pace, here's how this period may end:"
-                            : "This period has ended or is about to end.",
-                        style: text.bodySmall,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Projected total:",
-                            style: text.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            projectedTotal.toStringAsFixed(2),
-                            style: text.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      if (budget > 0) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "Vs. budget:",
-                              style: text.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              projectedDiff >= 0
-                                  ? "+${projectedDiff.toStringAsFixed(2)}"
-                                  : "-${(-projectedDiff).toStringAsFixed(2)}",
-                              style: text.bodyMedium?.copyWith(
-                                color: projectedDiff > 0
-                                    ? Colors.red
-                                    : Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      if (forecastMessages.isNotEmpty) ...[
-                        const Divider(),
-                        const SizedBox(height: 8),
-                        ...forecastMessages.map(
-                          (m) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Text("- $m", style: text.bodySmall),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+              ),
+            ],
+            if (periodIncome > 0 || periodTotal > 0) ...[
+              const SizedBox(height: 16),
+              HomeSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader(
+                      context,
+                      title: 'Income vs Expenses',
+                      subtitle:
+                          'A cleaner view of how much came in and went out.',
+                      icon: Icons.account_balance_wallet_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    _infoRow(
+                      context,
+                      label: 'Income this period',
+                      value: periodIncome.toStringAsFixed(2),
+                    ),
+                    const SizedBox(height: 10),
+                    _infoRow(
+                      context,
+                      label: 'Expenses this period',
+                      value: periodTotal.toStringAsFixed(2),
+                    ),
+                    const SizedBox(height: 10),
+                    _infoRow(
+                      context,
+                      label: 'Savings rate',
+                      value: '${savingsRate.toStringAsFixed(1)}%',
+                      valueColor: savingsRate >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ],
                 ),
-              ],
-
-              // ========= INCOME VS EXPENSES CARD =========
-              if (periodIncome > 0 || periodTotal > 0) ...[
-                const SizedBox(height: 16),
-                HomeSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.account_balance_wallet_rounded,
-                            size: 22,
+              ),
+            ],
+            if (upcomingRecurring.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              HomeSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader(
+                      context,
+                      title: 'Upcoming recurring payments',
+                      subtitle:
+                          'The next scheduled items that may affect your budget.',
+                      icon: Icons.event_repeat_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    ...upcomingRecurring.take(3).map((payment) {
+                      final dueDate = provider.getNextDueDate(payment);
+                      final dueStr = DateFormat('MMM d').format(dueDate);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Income vs Expenses",
-                            style: text.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest.withValues(
+                              alpha: 0.38,
                             ),
+                            borderRadius: BorderRadius.circular(18),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Income this period:",
-                            style: text.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            periodIncome.toStringAsFixed(2),
-                            style: text.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Expenses this period:",
-                            style: text.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            periodTotal.toStringAsFixed(2),
-                            style: text.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Savings rate:",
-                            style: text.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            "${savingsRate.toStringAsFixed(1)}%",
-                            style: text.bodyMedium?.copyWith(
-                              color: savingsRate >= 0
-                                  ? Colors.green
-                                  : Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              // ========= UPCOMING RECURRING =========
-              if (upcomingRecurring.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                HomeSectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.event_repeat_rounded, size: 22),
-                          const SizedBox(width: 8),
-                          Text(
-                            "Upcoming recurring payments",
-                            style: text.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ...upcomingRecurring.take(3).map((p) {
-                        final dueDate = provider.getNextDueDate(p);
-                        final dueStr = DateFormat('MMM d').format(dueDate);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Expanded(
                                 child: Text(
-                                  "${p.title} - due $dueStr",
-                                  style: text.bodyMedium,
+                                  '${payment.title} • due $dueStr',
                                   overflow: TextOverflow.ellipsis,
+                                  style: text.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                p.amount.toStringAsFixed(2),
+                                payment.amount.toStringAsFixed(2),
                                 style: text.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 30),
-
-              // ========= DATE PICKER + DATE SUMMARY =========
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left),
-                    tooltip: 'Previous day',
-                    onPressed: () {
-                      setState(() {
-                        _selectedDate = _selectedDate.subtract(
-                          const Duration(days: 1),
-                        );
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        "Spending for ${_dateFormat.format(_selectedDate)}",
-                        style: text.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.chevron_right),
-                    tooltip: 'Next day',
-                    onPressed: () {
-                      setState(() {
-                        _selectedDate = _selectedDate.add(
-                          const Duration(days: 1),
-                        );
-                      });
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.calendar_today_rounded),
-                    tooltip: 'Pick date',
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        firstDate: DateTime(DateTime.now().year - 1),
-                        lastDate: DateTime(DateTime.now().year + 1),
-                        initialDate: _selectedDate,
-                      );
-                      if (picked != null) {
-                        setState(() {
-                          _selectedDate = picked;
-                        });
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              HomeSectionCard(
-                child: Text(
-                  selectedDateTotal > 0
-                      ? 'Total spent on this date: ${selectedDateTotal.toStringAsFixed(2)}'
-                      : 'No spending recorded for this date.',
-                  style: text.bodyMedium,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ========= ENTRIES LIST FOR THIS DATE =========
-              Text(
-                "Entries for this date",
-                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-              if (entries.isEmpty)
-                HomeSectionCard(
-                  child: Text(
-                    "No detailed entries for this date.",
-                    style: text.bodyMedium,
-                  ),
-                )
-              else
-                Column(
-                  children: [
-                    for (int i = 0; i < entries.length; i++)
-                      SpendingEntryTile(
-                        entry: entries[i],
-                        onEdit: () {
-                          HomeSheets.showEditEntrySheet(
-                            context: context,
-                            date: _selectedDate,
-                            index: i,
-                            entry: entries[i],
-                            onDateChanged: (newDate) {
-                              setState(() {
-                                _selectedDate = newDate;
-                              });
-                            },
-                          );
-                        },
-                        onDelete: () {
-                          context.read<SpendingProvider>().removeEntryForDate(
-                            date: _selectedDate,
-                            index: i,
-                          );
-                        },
-                      ),
-                  ],
-                ),
-
-              const SizedBox(height: 24),
-
-              // ========= INSIGHTS =========
-              Text(
-                "Insights",
-                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Average per day in this period: ${avgPerDay.toStringAsFixed(2)}",
-                style: text.bodyMedium,
-              ),
-              const SizedBox(height: 12),
-              HomeSectionCard(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(minWidth: 180),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Top categories",
-                                style: text.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            _dateNavigatorCard(context, selectedDateTotal: selectedDateTotal),
+            const SizedBox(height: 18),
+            _sectionHeader(
+              context,
+              title: 'Entries for this date',
+              subtitle: 'Detailed activity for the selected day.',
+            ),
+            const SizedBox(height: 12),
+            if (entries.isEmpty)
+              HomeSectionCard(
+                child: Text(
+                  'No detailed entries for this date.',
+                  style: text.bodyMedium,
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: entries.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 2),
+                itemBuilder: (context, index) => SpendingEntryTile(
+                  entry: entries[index],
+                  onEdit: () {
+                    HomeSheets.showEditEntrySheet(
+                      context: context,
+                      date: _selectedDate,
+                      index: index,
+                      entry: entries[index],
+                      onDateChanged: (newDate) {
+                        setState(() {
+                          _selectedDate = newDate;
+                        });
+                      },
+                    );
+                  },
+                  onDelete: () {
+                    context.read<SpendingProvider>().removeEntryForDate(
+                      date: _selectedDate,
+                      index: index,
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 24),
+            _sectionHeader(
+              context,
+              title: 'Insights',
+              subtitle:
+                  'Average per day in this period: ${avgPerDay.toStringAsFixed(2)}',
+            ),
+            const SizedBox(height: 12),
+            HomeSectionCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 180),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Top categories',
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tap a category to review, edit, delete, or export its transactions.',
+                              style: text.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuButton<_CategorySortOption>(
+                        initialValue: _categorySortOption,
+                        onSelected: (value) {
+                          setState(() {
+                            _categorySortOption = value;
+                          });
+                        },
+                        itemBuilder: (context) => [
+                          for (final option in _CategorySortOption.values)
+                            PopupMenuItem(
+                              value: option,
+                              child: Text(_categorySortLabel(option)),
+                            ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: cs.primary.withValues(alpha: 0.22),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.sort_rounded,
+                                size: 18,
+                                color: cs.primary,
+                              ),
+                              const SizedBox(width: 8),
                               Text(
-                                "Tap a category to review, edit, delete, or export its transactions.",
-                                style: text.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                  height: 1.35,
+                                _categorySortLabel(_categorySortOption),
+                                style: text.bodyMedium?.copyWith(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600,
                                 ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.expand_more_rounded,
+                                size: 18,
+                                color: cs.primary,
                               ),
                             ],
                           ),
                         ),
-                        PopupMenuButton<_CategorySortOption>(
-                          initialValue: _categorySortOption,
-                          onSelected: (value) {
-                            setState(() {
-                              _categorySortOption = value;
-                            });
-                          },
-                          itemBuilder: (context) => [
-                            for (final option in _CategorySortOption.values)
-                              PopupMenuItem(
-                                value: option,
-                                child: Text(_categorySortLabel(option)),
-                              ),
-                          ],
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: cs.primary.withValues(alpha: 0.22),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.sort_rounded,
-                                  size: 18,
-                                  color: cs.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _categorySortLabel(_categorySortOption),
-                                  style: text.bodyMedium?.copyWith(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.expand_more_rounded,
-                                  size: 18,
-                                  color: cs.primary,
-                                ),
-                              ],
-                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (sortedCategoryInsights.isEmpty)
+                    Text(
+                      'No categories yet.',
+                      style: text.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: sortedCategoryInsights.length,
+                      itemBuilder: (context, index) =>
+                          _buildCategoryInsightCard(
+                            context,
+                            insight: sortedCategoryInsights[index],
+                            rank: index + 1,
+                            totalPeriodSpending: periodTotal,
                           ),
-                        ),
-                      ],
                     ),
-                    const SizedBox(height: 16),
-                    if (sortedCategoryInsights.isEmpty)
-                      Text(
-                        "No categories yet.",
-                        style: text.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            _sectionHeader(
+              context,
+              title: 'Recommendations',
+              subtitle: 'Suggestions based on your recent spending patterns.',
+            ),
+            const SizedBox(height: 12),
+            if (recs.isEmpty)
+              HomeSectionCard(
+                child: Text(
+                  'No recommendations yet.',
+                  style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              )
+            else
+              HomeSectionCard(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < recs.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: i == recs.length - 1 ? 0 : 12,
                         ),
-                      )
-                    else
-                      Column(
-                        children: [
-                          for (
-                            var i = 0;
-                            i < sortedCategoryInsights.length;
-                            i++
-                          )
-                            _buildCategoryInsightCard(
-                              context,
-                              insight: sortedCategoryInsights[i],
-                              rank: i + 1,
-                              totalPeriodSpending: periodTotal,
-                            ),
-                        ],
+                        child: _recommendationTile(context, recs[i]),
                       ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              // ========= RECOMMENDATIONS =========
-              Text(
-                "Recommendations",
-                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              for (final r in recs)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text("- $r"),
-                ),
-
-              const SizedBox(height: 30),
-            ],
-          ),
+          ],
         ),
       ),
 
@@ -971,6 +957,253 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (range != null) {
       await provider.setBudgetPeriod(range.start, range.end);
     }
+  }
+
+  Widget _sectionHeader(
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    IconData? icon,
+    Widget? trailing,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (icon != null) ...[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: cs.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: text.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 12), trailing],
+      ],
+    );
+  }
+
+  Widget _infoRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            value,
+            style: text.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: valueColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _messageRow(BuildContext context, {required String message}) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          alignment: Alignment.center,
+          child: Icon(Icons.insights_rounded, size: 14, color: cs.primary),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(message, style: text.bodySmall?.copyWith(height: 1.4)),
+        ),
+      ],
+    );
+  }
+
+  Widget _recommendationTile(BuildContext context, String message) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: cs.secondary.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 18,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: text.bodyMedium?.copyWith(height: 1.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateNavigatorCard(
+    BuildContext context, {
+    required double selectedDateTotal,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return HomeSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _DateNavButton(
+                icon: Icons.chevron_left_rounded,
+                tooltip: 'Previous day',
+                onTap: () {
+                  setState(() {
+                    _selectedDate = _selectedDate.subtract(
+                      const Duration(days: 1),
+                    );
+                  });
+                },
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Spending for',
+                      style: text.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _dateFormat.format(_selectedDate),
+                      textAlign: TextAlign.center,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _DateNavButton(
+                icon: Icons.chevron_right_rounded,
+                tooltip: 'Next day',
+                onTap: () {
+                  setState(() {
+                    _selectedDate = _selectedDate.add(const Duration(days: 1));
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              _DateNavButton(
+                icon: Icons.calendar_today_rounded,
+                tooltip: 'Pick date',
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    firstDate: DateTime(DateTime.now().year - 1),
+                    lastDate: DateTime(DateTime.now().year + 1),
+                    initialDate: _selectedDate,
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _selectedDate = picked;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.36),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Text(
+              selectedDateTotal > 0
+                  ? 'Total spent on this date: ${selectedDateTotal.toStringAsFixed(2)}'
+                  : 'No spending recorded for this date.',
+              style: text.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<_CategoryInsight> _buildSortedCategoryInsights(
@@ -1195,7 +1428,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final secure = context.watch<SecureValuesLockService>();
     final locked = secure.isLocked;
 
-    Future<void> _unlock() async {
+    Future<void> unlockSecureValues() async {
       final ok = await context
           .read<SecureValuesLockService>()
           .unlockWithBiometrics();
@@ -1206,7 +1439,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    void _lockAgain() {
+    void lockSecureValuesAgain() {
       context.read<SecureValuesLockService>().lock();
       ScaffoldMessenger.of(
         context,
@@ -1214,51 +1447,100 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(18),
       onTap: () async {
         if (locked) {
-          await _unlock(); // biometrics
+          await unlockSecureValues(); // biometrics
         } else {
-          _lockAgain(); // no biometrics
+          lockSecureValuesAgain(); // no biometrics
         }
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            locked ? "****" : value.toStringAsFixed(2),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              locked ? '****' : value.toStringAsFixed(2),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Icon(
+              locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+              size: 16,
+              color: Colors.white70,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              locked ? 'Tap to unlock' : 'Tap to lock',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DateNavButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _DateNavButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, color: cs.onSurfaceVariant),
           ),
-          const SizedBox(height: 4),
-          Icon(
-            locked ? Icons.lock_rounded : Icons.lock_open_rounded,
-            size: 16,
-            color: Colors.white70,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            locked ? "Tap to unlock" : "Tap to lock",
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white70, fontSize: 10),
-          ),
-        ],
+        ),
       ),
     );
   }

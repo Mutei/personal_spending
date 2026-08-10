@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../localization/language_constants.dart';
 import '../services/app_lock_service.dart';
 import '../services/auth_service.dart';
 
@@ -12,8 +13,6 @@ class AppLockGate extends StatefulWidget {
 }
 
 class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
-  bool _authInProgress = false;
-
   @override
   void initState() {
     super.initState();
@@ -74,8 +73,8 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                 children: [
                   const Icon(Icons.lock_rounded, size: 64),
                   const SizedBox(height: 12),
-                  const Text(
-                    "App is locked",
+                  Text(
+                    getTranslated(context, 'App is locked'),
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 18),
@@ -83,13 +82,15 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.fingerprint),
-                      label: const Text("Unlock"),
+                      label: Text(getTranslated(context, 'Unlock')),
                       onPressed: () async {
                         final ok = await lock.authenticate();
                         if (!ok && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Authentication failed"),
+                            SnackBar(
+                              content: Text(
+                                getTranslated(context, 'Authentication failed'),
+                              ),
                             ),
                           );
                         }

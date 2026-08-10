@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:personal_spendings/localization/language_constants.dart';
 
 class HomeMainDrawer extends StatelessWidget {
   final String displayName;
   final String email;
   final VoidCallback onOpenInsights;
   final VoidCallback onExport;
-  final VoidCallback onSendDailySummary;
+  final Future<void> Function() onSendTestNotifications;
   final VoidCallback onNotificationPreferences;
   final Future<void> Function() onSetBudget;
   final VoidCallback onManageRecurring;
+  final VoidCallback onLanguage;
   final VoidCallback onLogout;
   final VoidCallback onToggleAppLock;
   final bool appLockEnabled;
@@ -19,10 +21,11 @@ class HomeMainDrawer extends StatelessWidget {
     required this.email,
     required this.onOpenInsights,
     required this.onExport,
-    required this.onSendDailySummary,
+    required this.onSendTestNotifications,
     required this.onNotificationPreferences,
     required this.onSetBudget,
     required this.onManageRecurring,
+    required this.onLanguage,
     required this.onLogout,
     required this.onToggleAppLock,
     required this.appLockEnabled,
@@ -97,35 +100,62 @@ class HomeMainDrawer extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.insights_rounded),
-                  title: const Text('Insights'),
-                  subtitle: const Text(
-                    'Charts & recommendations for this period',
+                  title: Text(getTranslated(context, 'Insights')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Charts & recommendations for this period',
+                    ),
                   ),
                   onTap: onOpenInsights,
                 ),
                 ListTile(
                   leading: const Icon(Icons.download_rounded),
-                  title: const Text('Export spendings'),
-                  subtitle: const Text('Download CSV or PDF for this period'),
+                  title: Text(getTranslated(context, 'Export spendings')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Download CSV or PDF for this period',
+                    ),
+                  ),
                   onTap: onExport,
                 ),
                 ListTile(
                   leading: const Icon(Icons.notifications_active_rounded),
-                  title: const Text('Send daily summary now'),
-                  subtitle: const Text('Trigger today\'s summary notification'),
-                  onTap: onSendDailySummary,
+                  title: Text(
+                    getTranslated(context, 'Send test notifications'),
+                  ),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Resend the latest spending summary and budget alert',
+                    ),
+                  ),
+                  onTap: () async {
+                    await onSendTestNotifications();
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.tune_rounded),
-                  title: const Text('Notification preferences'),
-                  subtitle: const Text('Daily summary and financial context'),
+                  title: Text(
+                    getTranslated(context, 'Notification preferences'),
+                  ),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Daily summary and financial context',
+                    ),
+                  ),
                   onTap: onNotificationPreferences,
                 ),
                 ListTile(
                   leading: const Icon(Icons.edit_rounded),
-                  title: const Text('Set budget'),
-                  subtitle: const Text(
-                    'Update budget and bank account balances',
+                  title: Text(getTranslated(context, 'Set budget')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Update budget and bank account balances',
+                    ),
                   ),
                   onTap: () {
                     onSetBudget();
@@ -133,9 +163,25 @@ class HomeMainDrawer extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.event_repeat_rounded),
-                  title: const Text('Recurring payments'),
-                  subtitle: const Text('Manage monthly bills & auto-reminders'),
+                  title: Text(getTranslated(context, 'Recurring payments')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Manage monthly bills & auto-reminders',
+                    ),
+                  ),
                   onTap: onManageRecurring,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.language_rounded),
+                  title: Text(getTranslated(context, 'Language')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Choose your preferred app language',
+                    ),
+                  ),
+                  onTap: onLanguage,
                 ),
               ],
             ),
@@ -144,11 +190,14 @@ class HomeMainDrawer extends StatelessWidget {
             leading: Icon(
               appLockEnabled ? Icons.lock_rounded : Icons.lock_open_rounded,
             ),
-            title: const Text('App lock'),
+            title: Text(getTranslated(context, 'App lock')),
             subtitle: Text(
               appLockEnabled
-                  ? 'App is secured on launch'
-                  : 'Protect app with fingerprint or PIN',
+                  ? getTranslated(context, 'App is secured on launch')
+                  : getTranslated(
+                      context,
+                      'Protect app with fingerprint or PIN',
+                    ),
             ),
             trailing: Switch(
               value: appLockEnabled,
@@ -162,7 +211,7 @@ class HomeMainDrawer extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.logout, color: cs.error),
             title: Text(
-              'Logout',
+              getTranslated(context, 'Logout'),
               style: TextStyle(color: cs.error, fontWeight: FontWeight.w600),
             ),
             onTap: onLogout,

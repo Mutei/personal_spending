@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../providers/spending_provider.dart';
 import '../services/export_service.dart';
 
@@ -25,7 +26,7 @@ class HomeSheets {
         return StatefulBuilder(
           builder: (dialogContext, setState) {
             return AlertDialog(
-              title: const Text('Report title'),
+              title: Text(getTranslated(dialogContext, 'Report title')),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,7 +41,7 @@ class HomeSheets {
                     autofocus: true,
                     textInputAction: TextInputAction.done,
                     decoration: InputDecoration(
-                      labelText: 'Title',
+                      labelText: getTranslated(dialogContext, 'Title'),
                       border: const OutlineInputBorder(),
                       errorText: errorText,
                     ),
@@ -48,11 +49,14 @@ class HomeSheets {
                       final trimmed = controller.text.trim();
                       if (trimmed.isEmpty) {
                         setState(() {
-                          errorText = 'Please enter a report title';
+                          errorText = getTranslated(
+                            dialogContext,
+                            'Please enter a report title',
+                          );
                         });
                         return;
                       }
-                      Navigator.pop(dialogContext, controller.text);
+                      Navigator.pop(dialogContext, trimmed);
                     },
                   ),
                 ],
@@ -62,20 +66,23 @@ class HomeSheets {
                   onPressed: () {
                     Navigator.pop(dialogContext);
                   },
-                  child: const Text('Cancel'),
+                  child: Text(getTranslated(dialogContext, 'Cancel')),
                 ),
                 FilledButton(
                   onPressed: () {
                     final trimmed = controller.text.trim();
                     if (trimmed.isEmpty) {
                       setState(() {
-                        errorText = 'Please enter a report title';
+                        errorText = getTranslated(
+                          dialogContext,
+                          'Please enter a report title',
+                        );
                       });
                       return;
                     }
-                    Navigator.pop(dialogContext, controller.text);
+                    Navigator.pop(dialogContext, trimmed);
                   },
-                  child: const Text('Continue'),
+                  child: Text(getTranslated(dialogContext, 'Continue')),
                 ),
               ],
             );
@@ -1670,6 +1677,7 @@ class HomeSheets {
   ) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final dateFormat = DateFormat('yyyy-MM-dd');
 
     final titleController = TextEditingController();
     final amountController = TextEditingController();
@@ -1677,6 +1685,9 @@ class HomeSheets {
     final categoryController = TextEditingController();
     String bankSelection = _noBankValue;
     bool autoAdd = true;
+    String? editingId;
+    RecurringFrequency selectedFrequency = RecurringFrequency.monthly;
+    DateTime selectedStartDate = DateTime.now();
 
     showModalBottomSheet(
       context: context,
@@ -1689,6 +1700,42 @@ class HomeSheets {
         return StatefulBuilder(
           builder: (ctx, sheetSetState) {
             final list = provider.recurringPayments;
+            final isEditing = editingId != null;
+
+            void resetForm() {
+              sheetSetState(() {
+                editingId = null;
+                titleController.clear();
+                amountController.clear();
+                dayController.clear();
+                categoryController.clear();
+                bankSelection = _noBankValue;
+                autoAdd = true;
+                selectedFrequency = RecurringFrequency.monthly;
+                selectedStartDate = DateTime.now();
+              });
+            }
+
+            void populateForm(RecurringPayment payment) {
+              sheetSetState(() {
+                editingId = payment.id;
+                titleController.text = payment.title;
+                amountController.text = payment.amount.toStringAsFixed(2);
+                dayController.text = '${payment.dayOfMonth}';
+                categoryController.text = payment.category ?? '';
+                bankSelection =
+                    provider.findBankAccountId(
+                      bankAccountId: payment.bankAccountId,
+                      bankName: payment.bank,
+                    ) ??
+                    ((payment.bank != null && payment.bank!.trim().isNotEmpty)
+                        ? _legacyBankValue
+                        : _noBankValue);
+                autoAdd = payment.autoAdd;
+                selectedFrequency = payment.frequency;
+                selectedStartDate = payment.startDate;
+              });
+            }
 
             return Padding(
               padding: EdgeInsets.only(
@@ -1707,7 +1754,7 @@ class HomeSheets {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "Recurring payments",
+                            'Recurring payments',
                             style: text.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -1719,87 +1766,122 @@ class HomeSheets {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Add monthly bills like rent, gym, subscriptions.\nIf auto-add is ON, the app will record it automatically on that day.",
+                        'Create repeating payments like rent, subscriptions, and weekly transport. If auto-add is on, the app records the spending automatically when it becomes due.',
                         style: text.bodySmall,
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // existing
                     if (list.isNotEmpty) ...[
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          "Existing recurring payments",
+                          'Existing recurring payments',
                           style: text.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      ...list.map((p) {
-                        final due = provider.getNextDueDate(p);
+                      ...list.map((payment) {
+                        final due = provider.getNextDueDate(payment);
                         final dueStr = DateFormat('MMM d').format(due);
+                        final frequencyLabel =
+                            payment.frequency == RecurringFrequency.weekly
+                            ? 'Weekly'
+                            : 'Monthly';
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: cs.surfaceVariant.withOpacity(0.4),
+                            color: cs.surfaceContainerHighest.withValues(
+                              alpha: 0.4,
+                            ),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      p.title,
+                                      payment.title,
                                       style: text.bodyMedium?.copyWith(
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      "${p.amount.toStringAsFixed(2)} • day ${p.dayOfMonth} • next: $dueStr",
+                                      '${payment.amount.toStringAsFixed(2)} SAR',
                                       style: text.bodySmall,
                                     ),
-                                    if (p.bank != null && p.bank!.isNotEmpty)
+                                    Text(
+                                      payment.frequency ==
+                                              RecurringFrequency.weekly
+                                          ? '$frequencyLabel - starts ${dateFormat.format(payment.startDate)} - next: $dueStr'
+                                          : '$frequencyLabel - day ${payment.dayOfMonth} - next: $dueStr',
+                                      style: text.bodySmall,
+                                    ),
+                                    if (payment.category != null &&
+                                        payment.category!.trim().isNotEmpty)
                                       Text(
-                                        "Payment source: ${p.bank}",
+                                        'Category: ${payment.category}',
                                         style: text.bodySmall,
                                       ),
-                                    if (p.autoAdd)
+                                    if (payment.bank != null &&
+                                        payment.bank!.trim().isNotEmpty)
                                       Text(
-                                        "Auto-add ON",
-                                        style: text.bodySmall?.copyWith(
-                                          color: Colors.green,
-                                        ),
+                                        'Payment source: ${payment.bank}',
+                                        style: text.bodySmall,
                                       ),
+                                    Text(
+                                      payment.autoAdd
+                                          ? 'Auto-add is enabled'
+                                          : 'Auto-add is disabled',
+                                      style: text.bodySmall?.copyWith(
+                                        color: payment.autoAdd
+                                            ? Colors.green
+                                            : text.bodySmall?.color,
+                                      ),
+                                    ),
                                   ],
                                 ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                tooltip: 'Edit recurring payment',
+                                onPressed: () => populateForm(payment),
                               ),
                               IconButton(
                                 icon: const Icon(
                                   Icons.delete_outline,
                                   size: 20,
                                 ),
+                                tooltip: 'Delete recurring payment',
                                 onPressed: () async {
-                                  await provider.removeRecurringPayment(p.id);
-                                  sheetSetState(() {});
+                                  await provider.removeRecurringPayment(
+                                    payment.id,
+                                  );
+                                  if (editingId == payment.id) {
+                                    resetForm();
+                                  } else {
+                                    sheetSetState(() {});
+                                  }
                                 },
                               ),
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: 16),
                     ],
-
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Add new recurring payment",
+                        isEditing
+                            ? 'Edit recurring payment'
+                            : 'Add new recurring payment',
                         style: text.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -1809,33 +1891,107 @@ class HomeSheets {
                     TextField(
                       controller: titleController,
                       decoration: const InputDecoration(
-                        labelText: "Title (e.g. Rent, Gym, Netflix)",
+                        labelText: 'Title (e.g. Rent, Gym, Netflix)',
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: amountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                        labelText: "Amount",
+                        labelText: 'Amount',
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: dayController,
-                      keyboardType: TextInputType.number,
+                    DropdownButtonFormField<RecurringFrequency>(
+                      key: ValueKey(selectedFrequency),
+                      initialValue: selectedFrequency,
                       decoration: const InputDecoration(
-                        labelText: "Day of month (1–31)",
+                        labelText: 'Repeat schedule',
                         border: OutlineInputBorder(),
                       ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: RecurringFrequency.monthly,
+                          child: Text('Monthly'),
+                        ),
+                        DropdownMenuItem(
+                          value: RecurringFrequency.weekly,
+                          child: Text('Weekly'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        sheetSetState(() {
+                          selectedFrequency = value;
+                        });
+                      },
                     ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: selectedStartDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked == null) return;
+                        sheetSetState(() {
+                          selectedStartDate = picked;
+                          if (selectedFrequency == RecurringFrequency.monthly &&
+                              dayController.text.trim().isEmpty) {
+                            dayController.text = '${picked.day}';
+                          }
+                        });
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Start date',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.calendar_today_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(dateFormat.format(selectedStartDate)),
+                            ),
+                            const Text('Change'),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (selectedFrequency == RecurringFrequency.monthly) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: dayController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Day of month (1-31)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Weekly payments repeat every 7 days starting from the selected start date.',
+                          style: text.bodySmall,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     TextField(
                       controller: categoryController,
                       decoration: const InputDecoration(
-                        labelText: "Category (optional)",
+                        labelText: 'Category (optional)',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1852,7 +2008,7 @@ class HomeSheets {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text("Auto-add spending on due day"),
+                      title: const Text('Auto-add spending on due day'),
                       value: autoAdd,
                       onChanged: (val) {
                         sheetSetState(() {
@@ -1861,60 +2017,126 @@ class HomeSheets {
                       },
                     ),
                     const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: () async {
-                        final title = titleController.text.trim();
-                        final amount =
-                            double.tryParse(amountController.text.trim()) ?? 0;
-                        final day =
-                            int.tryParse(dayController.text.trim()) ?? 0;
-
-                        if (title.isEmpty || amount <= 0 || day <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Please enter valid title, amount & day of month',
+                    Row(
+                      children: [
+                        if (isEditing) ...[
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: resetForm,
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text('Cancel edit'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                          );
-                          return;
-                        }
+                            onPressed: () async {
+                              final title = titleController.text.trim();
+                              final amount =
+                                  double.tryParse(
+                                    amountController.text.trim(),
+                                  ) ??
+                                  0;
+                              final parsedDay =
+                                  int.tryParse(dayController.text.trim()) ?? 0;
+                              final day =
+                                  selectedFrequency ==
+                                      RecurringFrequency.monthly
+                                  ? parsedDay
+                                  : selectedStartDate.day;
+                              final invalidMonthlyDay =
+                                  selectedFrequency ==
+                                      RecurringFrequency.monthly &&
+                                  (day < 1 || day > 31);
 
-                        await provider.addRecurringPayment(
-                          title: title,
-                          amount: amount,
-                          dayOfMonth: day,
-                          category: categoryController.text.trim().isEmpty
-                              ? null
-                              : categoryController.text.trim(),
-                          bank: _bankNameFromSelection(provider, bankSelection),
-                          bankAccountId: _bankAccountIdFromSelection(
-                            bankSelection,
+                              if (title.isEmpty ||
+                                  amount <= 0 ||
+                                  invalidMonthlyDay) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      selectedFrequency ==
+                                              RecurringFrequency.monthly
+                                          ? 'Please enter a valid title, amount, and day of month.'
+                                          : 'Please enter a valid title and amount.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final category =
+                                  categoryController.text.trim().isEmpty
+                                  ? null
+                                  : categoryController.text.trim();
+                              final bank = _bankNameFromSelection(
+                                provider,
+                                bankSelection,
+                              );
+                              final bankAccountId = _bankAccountIdFromSelection(
+                                bankSelection,
+                              );
+
+                              if (editingId == null) {
+                                await provider.addRecurringPayment(
+                                  title: title,
+                                  amount: amount,
+                                  dayOfMonth: day,
+                                  frequency: selectedFrequency,
+                                  startDate: selectedStartDate,
+                                  category: category,
+                                  bank: bank,
+                                  bankAccountId: bankAccountId,
+                                  autoAdd: autoAdd,
+                                );
+                              } else {
+                                await provider.updateRecurringPayment(
+                                  id: editingId!,
+                                  title: title,
+                                  amount: amount,
+                                  dayOfMonth: day,
+                                  frequency: selectedFrequency,
+                                  startDate: selectedStartDate,
+                                  category: category,
+                                  bank: bank,
+                                  bankAccountId: bankAccountId,
+                                  autoAdd: autoAdd,
+                                );
+                              }
+
+                              await provider.processRecurringPayments();
+                              resetForm();
+                            },
+                            icon: Icon(
+                              isEditing
+                                  ? Icons.save_as_rounded
+                                  : Icons.save_rounded,
+                            ),
+                            label: Text(
+                              isEditing
+                                  ? 'Update recurring payment'
+                                  : 'Save recurring payment',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                          autoAdd: autoAdd,
-                        );
-                        sheetSetState(() {
-                          titleController.clear();
-                          amountController.clear();
-                          dayController.clear();
-                          categoryController.clear();
-                          bankSelection = _noBankValue;
-                          autoAdd = true;
-                        });
-                      },
-                      icon: const Icon(Icons.save_rounded),
-                      label: const Text(
-                        "Save recurring payment",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

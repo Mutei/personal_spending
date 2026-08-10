@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../localization/language_constants.dart';
 import '../../../providers/notification_center_provider.dart';
 import '../../../screens/notification_center_screen.dart';
 
@@ -13,7 +14,7 @@ class NotificationCenterButton extends StatelessWidget {
     final unreadCount = center.unreadCount;
 
     return IconButton(
-      tooltip: 'Notifications',
+      tooltip: getTranslated(context, 'Notifications'),
       onPressed: () {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),

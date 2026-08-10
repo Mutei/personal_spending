@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../providers/spending_provider.dart';
 import '../services/app_lock_service.dart';
+import '../widgets/common/app_loading_skeletons.dart';
 import 'lock_screen.dart';
 import 'login_screen.dart';
 
@@ -29,9 +30,7 @@ class AuthGate extends StatelessWidget {
       future: _initUserData(context, uid),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const AppBootLoadingSkeleton();
         }
         return const RootScreen();
       },
@@ -39,11 +38,16 @@ class AuthGate extends StatelessWidget {
   }
 
   Future<void> _initUserData(BuildContext context, String uid) async {
+    final provider = context.read<SpendingProvider>();
+
     // 1) attach user (remote pull may happen here)
-    await context.read<SpendingProvider>().attachUser(uid);
+    await provider.attachUser(uid);
 
     // 2) load LOCAL data for this uid (user-scoped prefs)
-    await context.read<SpendingProvider>().loadData(uid);
+    await provider.loadData(uid);
+
+    // 3) process any due recurring payments, including missed ones.
+    await provider.processRecurringPayments();
 
     // If OtherSpendingProvider also uses SharedPreferences, do the same:
     // await context.read<OtherSpendingProvider>().loadData(uid);

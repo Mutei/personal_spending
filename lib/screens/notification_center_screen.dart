@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../localization/language_constants.dart';
 import '../models/spending_notification.dart';
 import '../providers/notification_center_provider.dart';
 import 'daily_report_preview_screen.dart';
@@ -19,12 +20,12 @@ class NotificationCenterScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: Text(getTranslated(context, 'Notifications')),
         actions: [
           if (notifications.isNotEmpty)
             TextButton(
               onPressed: unreadCount == 0 ? null : center.markAllAsRead,
-              child: const Text('Mark all read'),
+              child: Text(getTranslated(context, 'Mark all read')),
             ),
         ],
       ),
@@ -42,14 +43,17 @@ class NotificationCenterScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'No notifications yet',
+                      getTranslated(context, 'No notifications yet'),
                       style: text.titleLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Your spending updates, reminders, and daily reports will appear here.',
+                      getTranslated(
+                        context,
+                        'Your spending updates, reminders, and daily reports will appear here.',
+                      ),
                       style: text.bodyMedium,
                       textAlign: TextAlign.center,
                     ),
@@ -82,7 +86,11 @@ class NotificationCenterScreen extends StatelessWidget {
                     await center.deleteNotification(notification.id);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${notification.title} deleted')),
+                      SnackBar(
+                        content: Text(
+                          '${notification.title} ${getTranslated(context, 'deleted')}',
+                        ),
+                      ),
                     );
                   },
                   child: _NotificationCard(

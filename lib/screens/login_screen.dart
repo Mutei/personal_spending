@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../localization/language_constants.dart';
 import '../../services/auth_service.dart';
 import '../models/saved_account.dart';
 import '../services/account_store.dart';
+import '../widgets/common/app_loading_skeletons.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -68,13 +70,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         Icon(Icons.wallet_rounded, size: 45, color: cs.primary),
                         const SizedBox(height: 6),
                         Text(
-                          "Welcome back",
+                          getTranslated(context, 'Welcome back'),
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "Login to track your spendings",
+                          getTranslated(
+                            context,
+                            'Login to track your spendings',
+                          ),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 20),
@@ -94,27 +99,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 12),
                         TextField(
                           controller: _idController,
-                          decoration: const InputDecoration(
-                            labelText: "Email or Username",
-                            prefixIcon: Icon(Icons.person_outline),
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: getTranslated(
+                              context,
+                              'Email or Username',
+                            ),
+                            prefixIcon: const Icon(Icons.person_outline),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _passController,
                           obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: "Password",
-                            prefixIcon: Icon(Icons.lock_outline),
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: getTranslated(context, 'Password'),
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
                           child: _loading
-                              ? const Center(child: CircularProgressIndicator())
+                              ? const FormButtonLoadingSkeleton()
                               : ElevatedButton(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: cs.primary,
@@ -127,8 +135,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   onPressed: _login,
-                                  child: const Text(
-                                    "Login",
+                                  child: Text(
+                                    getTranslated(context, 'Login'),
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -144,7 +152,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             );
                           },
-                          child: const Text("Don't have an account? Sign up"),
+                          child: Text(
+                            getTranslated(
+                              context,
+                              "Don't have an account? Sign up",
+                            ),
+                          ),
                         ),
                       ],
                     ),

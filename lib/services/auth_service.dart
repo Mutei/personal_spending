@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../localization/language_constants.dart';
 import 'firestore_service.dart';
 import 'notification_token_service.dart';
 
@@ -54,7 +55,11 @@ class AuthService extends ChangeNotifier {
       username.trim(),
     );
     if (taken) {
-      throw Exception('Username already taken, pick another one.');
+      throw Exception(
+        await getTranslatedForCurrentLocale(
+          'Username already taken, pick another one.',
+        ),
+      );
     }
 
     final cred = await _auth.createUserWithEmailAndPassword(
@@ -90,7 +95,11 @@ class AuthService extends ChangeNotifier {
     } else {
       email = await FirestoreService.instance.getEmailFromUsername(id);
       if (email == null) {
-        throw Exception('No user found with that username.');
+        throw Exception(
+          await getTranslatedForCurrentLocale(
+            'No user found with that username.',
+          ),
+        );
       }
     }
 
