@@ -11,6 +11,7 @@ import '../providers/spending_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/auth_service.dart';
 import 'category_details_screen.dart';
+import 'financial_assistant_screen.dart';
 import '../widgets/home/home/home_section_card.dart';
 import '../widgets/home/home/notification_center_button.dart';
 import 'insights_screen.dart';
@@ -136,6 +137,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     HomeSheets.showSetBudgetSheet(context, provider);
+  }
+
+  Future<void> _openFinancialAssistant(BuildContext context) async {
+    Navigator.pop(context);
+
+    final authSucceeded = await context.read<AppLockService>().authenticate(
+      localizedReason: getTranslated(
+        context,
+        'Authenticate to open the Financial Assistant',
+      ),
+      unlockSession: false,
+    );
+
+    if (!context.mounted) return;
+
+    if (!authSucceeded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            getTranslated(
+              context,
+              'Authentication required to access the Financial Assistant',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const FinancialAssistantScreen()));
   }
 
   @override
@@ -299,6 +332,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Navigator.pop(context);
           HomeSheets.showNotificationPreferencesSheet(context, provider);
         },
+        onOpenFinancialAssistant: () async {
+          await _openFinancialAssistant(context);
+        },
         onSetBudget: () async {
           await _openBudgetSheetWithAuthentication(context, provider);
         },
@@ -408,6 +444,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ],
                       ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            HomeSectionCard(
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.support_agent_rounded,
+                      color: cs.primary,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Financial Assistant',
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Ask about spending, budget, recurring payments, reports, and quick actions in one place.',
+                          style: text.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      await _openFinancialAssistant(context);
+                    },
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    label: const Text('Open'),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),

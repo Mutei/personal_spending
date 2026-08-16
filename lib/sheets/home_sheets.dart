@@ -12,6 +12,20 @@ class HomeSheets {
   static const String _noBankValue = '__no_bank__';
   static const String _legacyBankValue = '__legacy_bank__';
 
+  static List<_EditableBankAccount> _buildEditableBankAccounts(
+    List<BankAccount> accounts,
+  ) {
+    return accounts
+        .map(
+          (account) => _EditableBankAccount(
+            id: account.id,
+            name: account.name,
+            balance: account.balance,
+          ),
+        )
+        .toList();
+  }
+
   static Future<String?> promptForReportTitle(
     BuildContext context, {
     required String initialTitle,
@@ -819,49 +833,7 @@ class HomeSheets {
     final budgetController = TextEditingController(
       text: provider.monthlyBudget.toString(),
     );
-    final bankCountController = TextEditingController(
-      text: provider.bankAccounts.length.toString(),
-    );
-    final bankIds = <String>[];
-    final bankNameControllers = <TextEditingController>[];
-    final bankBalanceControllers = <TextEditingController>[];
-
-    String newBankId() =>
-        '${BankAccount.newId()}_${bankNameControllers.length}';
-
-    void syncBankControllers(int requestedCount) {
-      final count = requestedCount.clamp(0, 20).toInt();
-      while (bankNameControllers.length < count) {
-        final index = bankNameControllers.length;
-        final existing = index < provider.bankAccounts.length
-            ? provider.bankAccounts[index]
-            : null;
-        bankIds.add(existing?.id ?? newBankId());
-        bankNameControllers.add(
-          TextEditingController(text: existing?.name ?? ''),
-        );
-        bankBalanceControllers.add(
-          TextEditingController(
-            text: existing == null ? '' : existing.balance.toString(),
-          ),
-        );
-      }
-
-      while (bankNameControllers.length > count) {
-        bankIds.removeLast();
-        bankNameControllers.removeLast().dispose();
-        bankBalanceControllers.removeLast().dispose();
-      }
-    }
-
-    void updateCountController(int count) {
-      bankCountController.text = count.toString();
-      bankCountController.selection = TextSelection.collapsed(
-        offset: bankCountController.text.length,
-      );
-    }
-
-    syncBankControllers(provider.bankAccounts.length);
+    final editableBanks = _buildEditableBankAccounts(provider.bankAccounts);
 
     showModalBottomSheet(
       context: context,
@@ -928,122 +900,207 @@ class HomeSheets {
                           Row(
                             children: [
                               Expanded(
-                                child: TextFormField(
-                                  controller: bankCountController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    labelText:
-                                        "Number of bank accounts (optional)",
-                                    border: OutlineInputBorder(),
+                                child: Text(
+                                  "Bank accounts (${editableBanks.length}/20)",
+                                  style: text.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  onChanged: (value) {
-                                    final count =
-                                        int.tryParse(value.trim()) ?? 0;
-                                    sheetSetState(() {
-                                      syncBankControllers(count);
-                                    });
-                                  },
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              IconButton.outlined(
-                                tooltip: "Remove bank account",
-                                onPressed: bankNameControllers.isEmpty
+                              FilledButton.icon(
+                                onPressed: editableBanks.length >= 20
                                     ? null
                                     : () {
                                         sheetSetState(() {
-                                          syncBankControllers(
-                                            bankNameControllers.length - 1,
-                                          );
-                                          updateCountController(
-                                            bankNameControllers.length,
+                                          editableBanks.add(
+                                            _EditableBankAccount(
+                                              id: BankAccount.newId(),
+                                            ),
                                           );
                                         });
                                       },
-                                icon: const Icon(Icons.remove_rounded),
-                              ),
-                              const SizedBox(width: 4),
-                              IconButton.filled(
-                                tooltip: "Add bank account",
-                                onPressed: () {
-                                  sheetSetState(() {
-                                    syncBankControllers(
-                                      bankNameControllers.length + 1,
-                                    );
-                                    updateCountController(
-                                      bankNameControllers.length,
-                                    );
-                                  });
-                                },
                                 icon: const Icon(Icons.add_rounded),
+                                label: const Text("Add bank"),
                               ),
                             ],
                           ),
-                          if (bankNameControllers.isNotEmpty) ...[
+                          if (editableBanks.isNotEmpty) ...[
                             const SizedBox(height: 14),
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                "Bank accounts",
+                                "Press and drag to reorder. Deleting one bank will not affect the others.",
                                 style: text.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurfaceVariant,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 8),
-                            for (
-                              var i = 0;
-                              i < bankNameControllers.length;
-                              i++
-                            ) ...[
-                              Row(
-                                children: [
-                                  Expanded(
-                                    flex: 3,
-                                    child: TextFormField(
-                                      controller: bankNameControllers[i],
-                                      textInputAction: TextInputAction.next,
-                                      decoration: InputDecoration(
-                                        labelText: "Bank ${i + 1} name",
-                                        border: const OutlineInputBorder(),
+                            ReorderableListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              buildDefaultDragHandles: false,
+                              itemCount: editableBanks.length,
+                              proxyDecorator: (child, index, animation) {
+                                return AnimatedBuilder(
+                                  animation: animation,
+                                  child: child,
+                                  builder: (context, child) {
+                                    final t = Curves.easeOut.transform(
+                                      animation.value,
+                                    );
+                                    return Transform.scale(
+                                      scale: 1 + (0.02 * t),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        elevation: 6 * t,
+                                        borderRadius: BorderRadius.circular(18),
+                                        child: child,
                                       ),
-                                      validator: (value) {
-                                        if (value == null ||
-                                            value.trim().isEmpty) {
-                                          return "Required";
-                                        }
-                                        return null;
-                                      },
+                                    );
+                                  },
+                                );
+                              },
+                              onReorder: (oldIndex, newIndex) {
+                                sheetSetState(() {
+                                  if (newIndex > oldIndex) newIndex -= 1;
+                                  final bank = editableBanks.removeAt(oldIndex);
+                                  editableBanks.insert(newIndex, bank);
+                                });
+                              },
+                              itemBuilder: (context, index) {
+                                final bank = editableBanks[index];
+                                return Padding(
+                                  key: ValueKey(bank.id),
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 220),
+                                    curve: Curves.easeOutCubic,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: cs.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: cs.outlineVariant,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                "Bank ${index + 1}",
+                                                style: text.bodyMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              tooltip: "Delete bank account",
+                                              onPressed: () {
+                                                sheetSetState(() {
+                                                  final removed = editableBanks
+                                                      .removeAt(index);
+                                                  removed.dispose();
+                                                });
+                                              },
+                                              icon: const Icon(
+                                                Icons.delete_outline_rounded,
+                                              ),
+                                            ),
+                                            ReorderableDragStartListener(
+                                              index: index,
+                                              child: const Padding(
+                                                padding: EdgeInsets.all(8),
+                                                child: Icon(
+                                                  Icons.drag_handle_rounded,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: TextFormField(
+                                                controller: bank.nameController,
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      labelText: "Bank name",
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                    ),
+                                                validator: (value) {
+                                                  if (value == null ||
+                                                      value.trim().isEmpty) {
+                                                    return "Required";
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              flex: 2,
+                                              child: TextFormField(
+                                                controller:
+                                                    bank.balanceController,
+                                                keyboardType:
+                                                    const TextInputType.numberWithOptions(
+                                                      decimal: true,
+                                                    ),
+                                                decoration:
+                                                    const InputDecoration(
+                                                      labelText: "Balance",
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                    ),
+                                                validator: (value) {
+                                                  final parsed =
+                                                      double.tryParse(
+                                                        value?.trim() ?? '',
+                                                      );
+                                                  if (parsed == null ||
+                                                      parsed < 0) {
+                                                    return "Invalid";
+                                                  }
+                                                  return null;
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    flex: 2,
-                                    child: TextFormField(
-                                      controller: bankBalanceControllers[i],
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                      decoration: const InputDecoration(
-                                        labelText: "Balance",
-                                        border: OutlineInputBorder(),
-                                      ),
-                                      validator: (value) {
-                                        final parsed = double.tryParse(
-                                          value?.trim() ?? '',
-                                        );
-                                        if (parsed == null || parsed < 0) {
-                                          return "Invalid";
-                                        }
-                                        return null;
-                                      },
-                                    ),
-                                  ),
-                                ],
+                                );
+                              },
+                            ),
+                          ] else ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: cs.outlineVariant),
                               ),
-                              const SizedBox(height: 8),
-                            ],
+                              child: Text(
+                                "No bank accounts added yet. Use Add bank to create one.",
+                                style: text.bodyMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                           ],
                           const SizedBox(height: 12),
                           SizedBox(
@@ -1070,13 +1127,8 @@ class HomeSheets {
 
                                 final names = <String>{};
                                 final accounts = <BankAccount>[];
-                                for (
-                                  var i = 0;
-                                  i < bankNameControllers.length;
-                                  i++
-                                ) {
-                                  final name = bankNameControllers[i].text
-                                      .trim();
+                                for (final bank in editableBanks) {
+                                  final name = bank.nameController.text.trim();
                                   final key = name.toLowerCase();
                                   if (names.contains(key)) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -1091,10 +1143,10 @@ class HomeSheets {
                                   names.add(key);
                                   accounts.add(
                                     BankAccount(
-                                      id: bankIds[i],
+                                      id: bank.id,
                                       name: name,
                                       balance: double.parse(
-                                        bankBalanceControllers[i].text.trim(),
+                                        bank.balanceController.text.trim(),
                                       ),
                                     ),
                                   );
@@ -1122,7 +1174,12 @@ class HomeSheets {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      budgetController.dispose();
+      for (final bank in editableBanks) {
+        bank.dispose();
+      }
+    });
   }
 
   // ---------------- Add / Edit Spending Sheet ----------------
@@ -2343,5 +2400,22 @@ class HomeSheets {
         );
       },
     );
+  }
+}
+
+class _EditableBankAccount {
+  _EditableBankAccount({required this.id, String name = '', double? balance})
+    : nameController = TextEditingController(text: name),
+      balanceController = TextEditingController(
+        text: balance == null ? '' : balance.toString(),
+      );
+
+  final String id;
+  final TextEditingController nameController;
+  final TextEditingController balanceController;
+
+  void dispose() {
+    nameController.dispose();
+    balanceController.dispose();
   }
 }

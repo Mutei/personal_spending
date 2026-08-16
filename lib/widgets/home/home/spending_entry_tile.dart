@@ -80,9 +80,8 @@ class SpendingEntryTile extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _MetaChip(
                               icon: Icons.payments_outlined,
@@ -90,24 +89,31 @@ class SpendingEntryTile extends StatelessWidget {
                                   '${getTranslated(context, 'Amount')}: ${entry.amount.toStringAsFixed(2)}',
                             ),
                             if (entry.category != null &&
-                                entry.category!.isNotEmpty)
+                                entry.category!.isNotEmpty) ...[
+                              const SizedBox(height: 8),
                               _MetaChip(
                                 icon: Icons.category_outlined,
                                 label:
                                     '${getTranslated(context, 'Category')}: ${entry.category}',
                               ),
-                            if (entry.bank != null && entry.bank!.isNotEmpty)
+                            ],
+                            if (entry.bank != null &&
+                                entry.bank!.isNotEmpty) ...[
+                              const SizedBox(height: 8),
                               _MetaChip(
                                 icon: Icons.account_balance_wallet_outlined,
                                 label:
                                     '${getTranslated(context, 'Bank / card')}: ${entry.bank}',
                               ),
-                            if (entry.qty != null)
+                            ],
+                            if (entry.qty != null) ...[
+                              const SizedBox(height: 8),
                               _MetaChip(
                                 icon: Icons.confirmation_number_outlined,
                                 label:
                                     '${getTranslated(context, 'Quantity')}: ${entry.qty}',
                               ),
+                            ],
                           ],
                         ),
                       ],
@@ -151,19 +157,23 @@ class _MetaChip extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, size: 14, color: cs.primary),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          Expanded(
+            child: Text(
+              label,
+              softWrap: true,
+              style: text.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

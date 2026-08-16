@@ -213,5 +213,9 @@
   "last": "last",
   "Delete category": "Delete category",
   "Bank / card": "Bank / card",
-  "Quantity": "Quantity"
+  "Quantity": "Quantity",
+  "Financial Assistant": "Financial Assistant",
+  "Ask questions and confirm financial actions": "Ask questions and confirm financial actions",
+  "Authenticate to open the Financial Assistant": "Authenticate to open the Financial Assistant",
+  "Authentication required to access the Financial Assistant": "Authentication required to access the Financial Assistant"
 }

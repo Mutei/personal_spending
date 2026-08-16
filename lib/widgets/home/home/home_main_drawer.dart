@@ -9,6 +9,7 @@ class HomeMainDrawer extends StatelessWidget {
   final Future<void> Function() onSendTestNotifications;
   final VoidCallback onNotificationPreferences;
   final Future<void> Function() onSetBudget;
+  final Future<void> Function() onOpenFinancialAssistant;
   final VoidCallback onManageRecurring;
   final VoidCallback onLanguage;
   final VoidCallback onLogout;
@@ -24,6 +25,7 @@ class HomeMainDrawer extends StatelessWidget {
     required this.onSendTestNotifications,
     required this.onNotificationPreferences,
     required this.onSetBudget,
+    required this.onOpenFinancialAssistant,
     required this.onManageRecurring,
     required this.onLanguage,
     required this.onLogout,
@@ -147,6 +149,19 @@ class HomeMainDrawer extends StatelessWidget {
                     ),
                   ),
                   onTap: onNotificationPreferences,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: Text(getTranslated(context, 'Financial Assistant')),
+                  subtitle: Text(
+                    getTranslated(
+                      context,
+                      'Ask questions and confirm financial actions',
+                    ),
+                  ),
+                  onTap: () async {
+                    await onOpenFinancialAssistant();
+                  },
                 ),
                 ListTile(
                   leading: const Icon(Icons.edit_rounded),

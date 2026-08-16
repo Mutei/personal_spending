@@ -99,6 +99,73 @@ class DailyBudgetAdjustment {
   bool get isUnderBudget => cumulativeDifference > 0;
 }
 
+class RecurringPaymentCommitment {
+  final String paymentId;
+  final String title;
+  final double amount;
+  final DateTime dueDate;
+  final String? category;
+  final String? bank;
+  final String? bankAccountId;
+
+  const RecurringPaymentCommitment({
+    required this.paymentId,
+    required this.title,
+    required this.amount,
+    required this.dueDate,
+    this.category,
+    this.bank,
+    this.bankAccountId,
+  });
+}
+
+class BudgetGuidanceSnapshot {
+  final DateTime date;
+  final double baseDailyBudget;
+  final double dailyAllowance;
+  final double spentToday;
+  final double remainingTodayAllowance;
+  final double remainingBudget;
+  final int remainingDays;
+  final double upcomingRecurringTotal;
+  final List<RecurringPaymentCommitment> upcomingRecurringPayments;
+  final double discretionaryRemaining;
+  final double safeToSpendToday;
+  final double safeToSpendUntilEndOfPeriod;
+  final int? recoveryDays;
+  final double projectedAllowanceAfterRecovery;
+  final double tomorrowAllowanceIfNoMoreSpending;
+  final double followingDayAllowanceIfNoSpendingTomorrow;
+  final double recommendedDailyCap;
+  final double dailyReductionNeeded;
+
+  const BudgetGuidanceSnapshot({
+    required this.date,
+    required this.baseDailyBudget,
+    required this.dailyAllowance,
+    required this.spentToday,
+    required this.remainingTodayAllowance,
+    required this.remainingBudget,
+    required this.remainingDays,
+    required this.upcomingRecurringTotal,
+    required this.upcomingRecurringPayments,
+    required this.discretionaryRemaining,
+    required this.safeToSpendToday,
+    required this.safeToSpendUntilEndOfPeriod,
+    required this.recoveryDays,
+    required this.projectedAllowanceAfterRecovery,
+    required this.tomorrowAllowanceIfNoMoreSpending,
+    required this.followingDayAllowanceIfNoSpendingTomorrow,
+    required this.recommendedDailyCap,
+    required this.dailyReductionNeeded,
+  });
+
+  bool get isOverBudget => remainingBudget < 0;
+  bool get hasUpcomingRecurringPayments => upcomingRecurringPayments.isNotEmpty;
+  double get reservedForRecurring => upcomingRecurringTotal;
+  double get overBudgetAmount => isOverBudget ? -remainingBudget : 0;
+}
+
 /// A single income entry (salary, bonus, side income, etc.)
 class IncomeEntry {
   final double amount;
@@ -933,6 +1000,25 @@ class SpendingProvider extends ChangeNotifier {
     return _incomeByDate[key] ?? const [];
   }
 
+  Future<void> removeIncomeEntryForDate({
+    required DateTime date,
+    required int index,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dateKey = _dateKey(date);
+    final list = _incomeByDate[dateKey];
+    if (list == null || index < 0 || index >= list.length) return;
+
+    list.removeAt(index);
+    if (list.isEmpty) {
+      _incomeByDate.remove(dateKey);
+    } else {
+      _incomeByDate[dateKey] = List<IncomeEntry>.from(list);
+    }
+
+    await _recalcAndPersistIncomeDay(dateKey, prefs);
+  }
+
   // --------------------------------------------------
   // RECURRING PAYMENTS METHODS
   // --------------------------------------------------
@@ -1095,6 +1181,58 @@ class SpendingProvider extends ChangeNotifier {
       return ad.compareTo(bd);
     });
     return result;
+  }
+
+  List<RecurringPaymentCommitment> getUpcomingRecurringCommitmentsForPeriod({
+    DateTime? from,
+  }) {
+    if (_periodStart == null || _periodEnd == null) return const [];
+
+    final start = _dateOnly(from ?? DateTime.now());
+    final normalizedStart = start.isBefore(_dateOnly(_periodStart!))
+        ? _dateOnly(_periodStart!)
+        : start;
+    final end = _dateOnly(_periodEnd!);
+    final commitments = <RecurringPaymentCommitment>[];
+
+    for (final payment in _recurringPayments) {
+      final processedKeys = payment.processedOccurrenceKeys.toSet();
+      var dueDate = getNextDueDate(payment, from: normalizedStart);
+
+      while (!dueDate.isAfter(end)) {
+        final occurrenceKey = _dateKey(dueDate);
+        if (!processedKeys.contains(occurrenceKey) &&
+            !_hasRecurringOccurrenceRecorded(payment, dueDate, occurrenceKey)) {
+          commitments.add(
+            RecurringPaymentCommitment(
+              paymentId: payment.id,
+              title: payment.title,
+              amount: payment.amount,
+              dueDate: dueDate,
+              category: payment.category,
+              bank: payment.bank,
+              bankAccountId: payment.bankAccountId,
+            ),
+          );
+        }
+
+        final nextDueDate = getNextDueDate(
+          payment,
+          from: dueDate.add(const Duration(days: 1)),
+        );
+        if (!nextDueDate.isAfter(dueDate)) break;
+        dueDate = nextDueDate;
+      }
+    }
+
+    commitments.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    return commitments;
+  }
+
+  double getUpcomingRecurringTotalForPeriod({DateTime? from}) {
+    return getUpcomingRecurringCommitmentsForPeriod(
+      from: from,
+    ).fold(0.0, (sum, payment) => sum + payment.amount);
   }
 
   Future<void> processRecurringPayments({DateTime? now}) async {
@@ -1862,6 +2000,20 @@ class SpendingProvider extends ChangeNotifier {
     return _monthlyBudget - _calculateSpentBeforeDate(effectiveDate);
   }
 
+  double getRemainingBudgetIncludingDate(DateTime date) {
+    if (_monthlyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return 0;
+    }
+
+    final dateOnly = _dateOnly(date);
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    if (dateOnly.isBefore(start)) return _monthlyBudget;
+
+    final effectiveDate = dateOnly.isAfter(end) ? end : dateOnly;
+    return _monthlyBudget - getCumulativeSpendingForDate(effectiveDate);
+  }
+
   int getTotalDaysInPeriod() {
     if (_periodStart == null || _periodEnd == null) return 0;
 
@@ -1901,6 +2053,114 @@ class SpendingProvider extends ChangeNotifier {
     }
 
     return allowance;
+  }
+
+  double getRemainingAllowanceForDate(DateTime date) {
+    final dateOnly = _dateOnly(date);
+    return getDailyAllowanceForDate(dateOnly) - getSpendingForDate(dateOnly);
+  }
+
+  double getProjectedAllowanceIfNoMoreSpending(DateTime date, int daysAhead) {
+    if (daysAhead < 0) return 0;
+
+    final baseDailyBudget = getBaseDailyBudget();
+    if (baseDailyBudget <= 0 || _periodStart == null || _periodEnd == null) {
+      return 0;
+    }
+
+    final start = _dateOnly(_periodStart!);
+    final end = _dateOnly(_periodEnd!);
+    final dateOnly = _dateOnly(date);
+    if (dateOnly.isBefore(start) || dateOnly.isAfter(end)) return 0;
+
+    var projectedAllowance = getRemainingAllowanceForDate(dateOnly);
+    for (var i = 0; i < daysAhead; i++) {
+      projectedAllowance += baseDailyBudget;
+    }
+    return projectedAllowance;
+  }
+
+  BudgetGuidanceSnapshot getBudgetGuidanceSnapshotForDate(DateTime date) {
+    final dateOnly = _dateOnly(date);
+    final baseDailyBudget = getBaseDailyBudget();
+    final dailyAllowance = getDailyAllowanceForDate(dateOnly);
+    final spentToday = getSpendingForDate(dateOnly);
+    final remainingTodayAllowance = dailyAllowance - spentToday;
+    final remainingBudget = getRemainingBudgetIncludingDate(dateOnly);
+    final remainingDays = getRemainingDaysInPeriod(dateOnly);
+    final recurringCommitments = getUpcomingRecurringCommitmentsForPeriod(
+      from: dateOnly,
+    );
+    final upcomingRecurringTotal = recurringCommitments.fold(
+      0.0,
+      (sum, payment) => sum + payment.amount,
+    );
+    final discretionaryRemaining = remainingBudget - upcomingRecurringTotal;
+    final safeToSpendToday = remainingTodayAllowance <= discretionaryRemaining
+        ? remainingTodayAllowance
+        : discretionaryRemaining;
+    final safeToSpendUntilEndOfPeriod = discretionaryRemaining;
+
+    int? recoveryDays;
+    var projectedAllowanceAfterRecovery = remainingTodayAllowance;
+    if (baseDailyBudget > 0 && remainingDays > 0) {
+      if (remainingTodayAllowance > 0) {
+        recoveryDays = 0;
+      } else {
+        var days = 0;
+        while (projectedAllowanceAfterRecovery <= 0 && days < remainingDays) {
+          projectedAllowanceAfterRecovery += baseDailyBudget;
+          days++;
+        }
+        if (projectedAllowanceAfterRecovery > 0) {
+          recoveryDays = days;
+        } else {
+          recoveryDays = null;
+        }
+      }
+    }
+
+    final tomorrowAllowanceIfNoMoreSpending =
+        getProjectedAllowanceIfNoMoreSpending(dateOnly, 1);
+    final followingDayAllowanceIfNoSpendingTomorrow =
+        getProjectedAllowanceIfNoMoreSpending(dateOnly, 2);
+    final double recommendedDailyCap = remainingDays > 0
+        ? discretionaryRemaining / remainingDays
+        : 0.0;
+    final double normalizedDailyCap = recommendedDailyCap < 0
+        ? 0.0
+        : recommendedDailyCap;
+    final double dailyReductionNeeded = baseDailyBudget > normalizedDailyCap
+        ? baseDailyBudget - normalizedDailyCap
+        : 0.0;
+
+    return BudgetGuidanceSnapshot(
+      date: dateOnly,
+      baseDailyBudget: baseDailyBudget,
+      dailyAllowance: dailyAllowance,
+      spentToday: spentToday,
+      remainingTodayAllowance: remainingTodayAllowance,
+      remainingBudget: remainingBudget,
+      remainingDays: remainingDays,
+      upcomingRecurringTotal: upcomingRecurringTotal,
+      upcomingRecurringPayments: recurringCommitments,
+      discretionaryRemaining: discretionaryRemaining,
+      safeToSpendToday: safeToSpendToday < 0 ? 0.0 : safeToSpendToday,
+      safeToSpendUntilEndOfPeriod: safeToSpendUntilEndOfPeriod,
+      recoveryDays: recoveryDays,
+      projectedAllowanceAfterRecovery: projectedAllowanceAfterRecovery > 0
+          ? projectedAllowanceAfterRecovery
+          : 0.0,
+      tomorrowAllowanceIfNoMoreSpending: tomorrowAllowanceIfNoMoreSpending < 0
+          ? 0.0
+          : tomorrowAllowanceIfNoMoreSpending,
+      followingDayAllowanceIfNoSpendingTomorrow:
+          followingDayAllowanceIfNoSpendingTomorrow < 0
+          ? 0.0
+          : followingDayAllowanceIfNoSpendingTomorrow,
+      recommendedDailyCap: normalizedDailyCap,
+      dailyReductionNeeded: dailyReductionNeeded,
+    );
   }
 
   DailyBudgetAdjustment? getDailyBudgetAdjustmentForDate(DateTime date) {
