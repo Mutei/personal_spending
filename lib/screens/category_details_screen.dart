@@ -257,7 +257,7 @@ class _CategoryRecordCard extends StatelessWidget {
         ? entry.item!.trim()
         : getTranslated(context, 'Spending');
     final subtitleParts = <String>[
-      DateFormat.yMMMd().format(record.date),
+      DateFormat('EEE, MMM d, yyyy').format(record.date),
       if (entry.bank?.trim().isNotEmpty == true) entry.bank!.trim(),
       if (entry.qty != null && entry.qty! > 1)
         '${getTranslated(context, 'Qty')} ${entry.qty}',

@@ -275,7 +275,7 @@ class NotificationPreferences {
   }
 }
 
-enum RecurringFrequency { monthly, weekly }
+enum RecurringFrequency { monthly, weekly, once }
 
 /// Recurring payments like rent, gym, subscriptions
 class RecurringPayment {
@@ -1130,6 +1130,11 @@ class SpendingProvider extends ChangeNotifier {
     final fromDate = _dateOnly(from ?? DateTime.now());
     final startDate = _dateOnly(p.startDate);
 
+    // A one-time scheduled payment is due only on its selected start date.
+    if (p.frequency == RecurringFrequency.once) {
+      return startDate;
+    }
+
     if (p.frequency == RecurringFrequency.weekly) {
       if (!fromDate.isAfter(startDate)) return startDate;
       final daysDiff = fromDate.difference(startDate).inDays;
@@ -1170,7 +1175,11 @@ class SpendingProvider extends ChangeNotifier {
     for (final p in _recurringPayments) {
       final due = getNextDueDate(p);
       final diffDays = due.difference(todayDateOnly).inDays;
-      if (diffDays >= 0 && diffDays <= daysAhead) {
+      final occurrenceKey = _dateKey(due);
+      final isProcessed =
+          p.processedOccurrenceKeys.contains(occurrenceKey) ||
+          _hasRecurringOccurrenceRecorded(p, due, occurrenceKey);
+      if (!isProcessed && diffDays >= 0 && diffDays <= daysAhead) {
         result.add(p);
       }
     }
@@ -1198,6 +1207,12 @@ class SpendingProvider extends ChangeNotifier {
     for (final payment in _recurringPayments) {
       final processedKeys = payment.processedOccurrenceKeys.toSet();
       var dueDate = getNextDueDate(payment, from: normalizedStart);
+
+      // A one-time payment should not reserve money again after its due date.
+      if (payment.frequency == RecurringFrequency.once &&
+          dueDate.isBefore(normalizedStart)) {
+        continue;
+      }
 
       while (!dueDate.isAfter(end)) {
         final occurrenceKey = _dateKey(dueDate);
@@ -1328,6 +1343,11 @@ class SpendingProvider extends ChangeNotifier {
         results.add(due);
         due = due.add(const Duration(days: 7));
       }
+      return results;
+    }
+
+    if (payment.frequency == RecurringFrequency.once) {
+      results.add(startDate);
       return results;
     }
 

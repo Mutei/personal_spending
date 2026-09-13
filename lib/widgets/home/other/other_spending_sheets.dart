@@ -366,7 +366,7 @@ class OtherSpendingSheets {
       text: entry?.qty != null ? '${entry!.qty}' : '',
     );
     DateTime selectedDate = entry?.date ?? DateTime.now();
-    final dateFmt = DateFormat('yyyy-MM-dd');
+    final dateFmt = DateFormat('EEE, yyyy-MM-dd');
 
     showModalBottomSheet(
       context: context,

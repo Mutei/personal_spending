@@ -94,6 +94,70 @@ class FirestoreService {
     return snap.data();
   }
 
+  CollectionReference<Map<String, dynamic>> notificationCenterCol(String uid) =>
+      userDoc(uid).collection('notification_center');
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchNotificationCenter(
+    String uid,
+  ) {
+    return notificationCenterCol(uid).snapshots();
+  }
+
+  Future<void> upsertNotificationCenterItems({
+    required String uid,
+    required Iterable<Map<String, dynamic>> notifications,
+  }) async {
+    final batch = _db.batch();
+    for (final item in notifications) {
+      final id = item['id'] as String?;
+      if (id == null || id.isEmpty) continue;
+      batch.set(
+        notificationCenterCol(uid).doc(id),
+        item,
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
+  }
+
+  Future<void> markNotificationCenterItemsRead({
+    required String uid,
+    required Iterable<String> notificationIds,
+    required DateTime readAt,
+  }) async {
+    final ids = notificationIds.toSet();
+    if (ids.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final id in ids) {
+      batch.set(notificationCenterCol(uid).doc(id), {
+        'id': id,
+        'isRead': true,
+        'readAt': readAt.toIso8601String(),
+        'deletedAt': null,
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  Future<void> softDeleteNotificationCenterItems({
+    required String uid,
+    required Iterable<String> notificationIds,
+    required DateTime deletedAt,
+  }) async {
+    final ids = notificationIds.toSet();
+    if (ids.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final id in ids) {
+      batch.set(notificationCenterCol(uid).doc(id), {
+        'id': id,
+        'deletedAt': deletedAt.toIso8601String(),
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
   // ------------------------------------------------------------
   // DAILY SPENDINGS (your original code)
   // users/{uid}/daily_spendings/{yyyy-MM-dd}

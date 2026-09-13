@@ -7,27 +7,55 @@ import '../models/spending_notification.dart';
 import '../providers/notification_center_provider.dart';
 import 'daily_report_preview_screen.dart';
 
-class NotificationCenterScreen extends StatelessWidget {
+class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
+
+  @override
+  State<NotificationCenterScreen> createState() => _NotificationCenterScreenState();
+}
+
+class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
+  String _lastAutoReadSignature = '';
+  bool _autoReadInFlight = false;
+
+  void _scheduleAutoRead(NotificationCenterProvider center) {
+    final unreadIds = center.notifications
+        .where((item) => !item.isRead)
+        .map((item) => item.id)
+        .toList()
+      ..sort();
+    if (unreadIds.isEmpty) {
+      _lastAutoReadSignature = '';
+      return;
+    }
+
+    final signature = unreadIds.join('|');
+    if (_autoReadInFlight || signature == _lastAutoReadSignature) return;
+
+    _lastAutoReadSignature = signature;
+    _autoReadInFlight = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await center.markNotificationsAsRead(unreadIds);
+      } finally {
+        _autoReadInFlight = false;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final center = context.watch<NotificationCenterProvider>();
     final notifications = center.notifications;
-    final unreadCount = center.unreadCount;
     final text = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
+
+    _scheduleAutoRead(center);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(getTranslated(context, 'Notifications')),
-        actions: [
-          if (notifications.isNotEmpty)
-            TextButton(
-              onPressed: unreadCount == 0 ? null : center.markAllAsRead,
-              child: Text(getTranslated(context, 'Mark all read')),
-            ),
-        ],
       ),
       body: notifications.isEmpty
           ? Center(
@@ -96,7 +124,6 @@ class NotificationCenterScreen extends StatelessWidget {
                   child: _NotificationCard(
                     notification: notification,
                     onTap: () async {
-                      await center.markAsRead(notification.id);
                       if (!context.mounted) return;
 
                       if (notification.type ==

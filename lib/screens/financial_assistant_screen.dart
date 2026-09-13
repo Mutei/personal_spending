@@ -29,11 +29,13 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
   FinancialAssistantConversationContext _conversationContext =
       const FinancialAssistantConversationContext();
   List<String> _inlineSuggestions = const <String>[];
+  bool _suggestionsDismissed = false;
   Timer? _midnightTimer;
   String? _activeSessionDateKey;
   bool _isProcessing = false;
   bool _didSeedWelcomeMessage = false;
   bool _isHydratingSession = true;
+  int? _editingUserMessageIndex;
 
   @override
   void initState() {
@@ -68,6 +70,7 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
 
   void _seedWelcomeMessage() {
     final provider = context.read<SpendingProvider>();
+    final initialContext = const FinancialAssistantConversationContext();
     _messages
       ..clear()
       ..add(
@@ -88,6 +91,7 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
               value: '${provider.dailyAllowance.toStringAsFixed(2)} SAR',
             ),
           ],
+          contextSnapshot: initialContext,
         ),
       );
   }
@@ -199,20 +203,153 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
 
   String _sessionKeyForToday() {
     final uid = context.read<AuthService>().currentUser?.uid ?? 'guest';
-    return 'financial_assistant_session_{$uid}_${_todayKey()}';
+    return 'financial_assistant_session_${uid}_${_todayKey()}';
+  }
+
+  bool get _hasStartedConversation =>
+      _messages.any((message) => message.isUser);
+
+  bool _shouldShowHeaderPrompts(bool keyboardVisible) {
+    return !_hasStartedConversation && !keyboardVisible;
+  }
+
+  bool _shouldShowInlineSuggestions() {
+    final hasTypedInput = _inputController.text.trim().isNotEmpty;
+    if (!_hasStartedConversation && !hasTypedInput) return false;
+    return _inlineSuggestions.isNotEmpty && !_suggestionsDismissed;
+  }
+
+  List<String> get _primaryInlineSuggestions {
+    final hasTypedInput = _inputController.text.trim().isNotEmpty;
+    final limit = hasTypedInput ? 4 : (_hasStartedConversation ? 3 : 5);
+    return _inlineSuggestions.take(limit).toList();
+  }
+
+  bool get _hasMoreInlineSuggestions =>
+      _inlineSuggestions.length > _primaryInlineSuggestions.length;
+
+  Future<void> _showAllSuggestionsSheet() async {
+    final suggestions = List<String>.from(_inlineSuggestions);
+    if (suggestions.isEmpty) return;
+
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: cs.shadow.withValues(alpha: 0.18),
+                  blurRadius: 24,
+                  offset: const Offset(0, -6),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 10, bottom: 12),
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(Icons.auto_awesome_rounded, color: cs.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Suggested questions',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                    itemCount: suggestions.length,
+                    separatorBuilder: (_, __) => Divider(
+                      color: cs.outlineVariant.withValues(alpha: 0.45),
+                    ),
+                    itemBuilder: (context, index) {
+                      final suggestion = suggestions[index];
+                      return ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        leading: Icon(
+                          _suggestionIconFor(suggestion),
+                          color: cs.primary,
+                        ),
+                        title: _SuggestionText(
+                          suggestion: suggestion,
+                          query: _inputController.text.trim(),
+                        ),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          _insertSuggestion(suggestion);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _updateInlineSuggestions([String? rawInput]) {
     if (!mounted) return;
+    final query = rawInput ?? _inputController.text;
     final provider = context.read<SpendingProvider>();
     final nextSuggestions = _service.suggestionsForInput(
-      rawInput ?? _inputController.text,
+      query,
       provider,
       context: _conversationContext,
     );
     setState(() {
       _inlineSuggestions = nextSuggestions;
+      if (query.trim().isNotEmpty) {
+        _suggestionsDismissed = false;
+      }
     });
+  }
+
+  void _insertSuggestion(String suggestion) {
+    _inputController
+      ..text = suggestion
+      ..selection = TextSelection.collapsed(offset: suggestion.length);
+    _updateInlineSuggestions(suggestion);
+    _inputFocusNode.requestFocus();
+  }
+
+  Future<void> _submitComposer() async {
+    if (_editingUserMessageIndex != null) {
+      await _saveEditedUserMessage();
+      return;
+    }
+    await _sendMessage();
   }
 
   Future<void> _sendMessage([String? preset]) async {
@@ -252,7 +389,143 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
           text: reply.message,
           facts: reply.facts,
           pendingAction: reply.pendingAction,
+          contextSnapshot: reply.context,
         ),
+      );
+      _isProcessing = false;
+    });
+    await _persistSession();
+    _scrollToBottom();
+  }
+
+  bool _canEditUserMessage(int index) {
+    if (index < 0 || index >= _messages.length) return false;
+    final message = _messages[index];
+    if (!message.isUser) return false;
+
+    for (var i = index + 1; i < _messages.length; i++) {
+      final current = _messages[i];
+      if (current.isUser) continue;
+      if (current.pendingAction != null && current.isResolved) {
+        return false;
+      }
+    }
+
+    return _contextBeforeUserMessage(index) != null;
+  }
+
+  FinancialAssistantConversationContext? _contextBeforeUserMessage(int index) {
+    for (var i = index - 1; i >= 0; i--) {
+      final message = _messages[i];
+      if (message.isUser) continue;
+      if (message.contextSnapshot != null) {
+        return message.contextSnapshot;
+      }
+    }
+
+    if (index == 0) {
+      return const FinancialAssistantConversationContext();
+    }
+    return null;
+  }
+
+  void _startEditingUserMessage(int index) {
+    if (!_canEditUserMessage(index)) return;
+    final message = _messages[index];
+    _editingUserMessageIndex = index;
+    _insertSuggestion(message.text);
+    setState(() {});
+  }
+
+  void _cancelEditingUserMessage() {
+    _editingUserMessageIndex = null;
+    _inputController.clear();
+    _updateInlineSuggestions('');
+    setState(() {});
+  }
+
+  Future<void> _saveEditedUserMessage() async {
+    await _rolloverIfNeeded();
+    final index = _editingUserMessageIndex;
+    final updatedText = _inputController.text.trim();
+    if (index == null || updatedText.isEmpty || _isProcessing) return;
+
+    final baseContext = _contextBeforeUserMessage(index);
+    if (baseContext == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This message can no longer be edited safely because its conversation context is unavailable.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final suffixHasResolvedAction = _messages
+        .skip(index + 1)
+        .where((message) => !message.isUser)
+        .any((message) => message.pendingAction != null && message.isResolved);
+    if (suffixHasResolvedAction) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Messages tied to confirmed financial actions cannot be edited automatically.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    final provider = context.read<SpendingProvider>();
+    final replayInputs = <String>[
+      updatedText,
+      ..._messages
+          .skip(index + 1)
+          .where((message) => message.isUser)
+          .map((message) => message.text),
+    ];
+    final preservedPrefix = List<_ChatMessage>.from(_messages.take(index));
+
+    setState(() {
+      _isProcessing = true;
+      _editingUserMessageIndex = null;
+      _inlineSuggestions = const <String>[];
+    });
+
+    var runningContext = baseContext;
+    final rebuiltMessages = List<_ChatMessage>.from(preservedPrefix);
+    for (final input in replayInputs) {
+      rebuiltMessages.add(_ChatMessage.user(input));
+      final reply = _service.handleMessage(
+        input,
+        provider,
+        context: runningContext,
+      );
+      runningContext = reply.context;
+      rebuiltMessages.add(
+        _ChatMessage.assistant(
+          text: reply.message,
+          facts: reply.facts,
+          pendingAction: reply.pendingAction,
+          contextSnapshot: runningContext,
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    _inputController.clear();
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(rebuiltMessages);
+      _conversationContext = runningContext;
+      _inlineSuggestions = _service.suggestionsForInput(
+        '',
+        provider,
+        context: _conversationContext,
       );
       _isProcessing = false;
     });
@@ -279,6 +552,7 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
           _ChatMessage.assistant(
             text:
                 'The export sheet is open. You can continue with PDF or CSV from there.',
+            contextSnapshot: _conversationContext,
           ),
         );
       });
@@ -299,11 +573,16 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
     );
 
     if (!mounted) return;
+    final nextContext = _contextAfterAction(action, result);
     setState(() {
       _isProcessing = false;
-      _conversationContext = _contextAfterAction(action, result);
+      _conversationContext = nextContext;
       _messages.add(
-        _ChatMessage.assistant(text: result.message, facts: result.facts),
+        _ChatMessage.assistant(
+          text: result.message,
+          facts: result.facts,
+          contextSnapshot: nextContext,
+        ),
       );
     });
     await _persistSession();
@@ -334,11 +613,16 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
     );
 
     if (!mounted) return;
+    final nextContext = _contextAfterAction(mergeAction, result);
     setState(() {
       _isProcessing = false;
-      _conversationContext = _contextAfterAction(mergeAction, result);
+      _conversationContext = nextContext;
       _messages.add(
-        _ChatMessage.assistant(text: result.message, facts: result.facts),
+        _ChatMessage.assistant(
+          text: result.message,
+          facts: result.facts,
+          contextSnapshot: nextContext,
+        ),
       );
     });
     await _persistSession();
@@ -353,7 +637,10 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
         clearPendingAction: true,
       );
       _messages.add(
-        _ChatMessage.assistant(text: 'Cancelled. No changes were made.'),
+        _ChatMessage.assistant(
+          text: 'Cancelled. No changes were made.',
+          contextSnapshot: _conversationContext,
+        ),
       );
     });
     await _persistSession();
@@ -372,7 +659,12 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
       _conversationContext = _conversationContext.copyWith(
         lastPendingAction: preparedAction,
       );
-      _messages.add(_ChatMessage.assistant(text: helperText));
+      _messages.add(
+        _ChatMessage.assistant(
+          text: helperText,
+          contextSnapshot: _conversationContext,
+        ),
+      );
     });
 
     await _persistSession();
@@ -542,7 +834,9 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                                 height: 1.35,
                               ),
                             ),
-                            if (!keyboardVisible) ...<Widget>[
+                            if (_shouldShowHeaderPrompts(
+                              keyboardVisible,
+                            )) ...<Widget>[
                               const SizedBox(height: 12),
                               SizedBox(
                                 height: 40,
@@ -594,7 +888,8 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                                       iconTheme: IconThemeData(
                                         color: chipForeground,
                                       ),
-                                      onPressed: () => _sendMessage(prompt),
+                                      onPressed: () =>
+                                          _insertSuggestion(prompt),
                                     );
                                   },
                                 ),
@@ -616,6 +911,10 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                           final message = _messages[index];
                           return _ChatBubble(
                             message: message,
+                            onEditUserMessage:
+                                message.isUser && _canEditUserMessage(index)
+                                ? () => _startEditingUserMessage(index)
+                                : null,
                             onIncreaseDuplicateQuantity:
                                 message.pendingAction == null ||
                                     message.isResolved ||
@@ -679,65 +978,196 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    if (_inlineSuggestions
-                                        .isNotEmpty) ...<Widget>[
+                                    if (_shouldShowInlineSuggestions()) ...<
+                                      Widget
+                                    >[
                                       Padding(
                                         padding: const EdgeInsets.only(
-                                          bottom: 8,
+                                          bottom: 10,
                                         ),
-                                        child: AnimatedContainer(
+                                        child: AnimatedSize(
                                           duration: const Duration(
-                                            milliseconds: 180,
+                                            milliseconds: 160,
                                           ),
                                           curve: Curves.easeOutCubic,
-                                          constraints: const BoxConstraints(
-                                            maxHeight: 220,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Row(
+                                                children: <Widget>[
+                                                  Icon(
+                                                    Icons.auto_awesome_rounded,
+                                                    size: 16,
+                                                    color: cs.primary,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    _hasStartedConversation
+                                                        ? 'Smart suggestions'
+                                                        : 'Suggested questions',
+                                                    style: text.labelMedium
+                                                        ?.copyWith(
+                                                          color: cs
+                                                              .onSurfaceVariant,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                  ),
+                                                  const Spacer(),
+                                                  if (_hasMoreInlineSuggestions)
+                                                    TextButton(
+                                                      onPressed: _isProcessing
+                                                          ? null
+                                                          : _showAllSuggestionsSheet,
+                                                      style: TextButton.styleFrom(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                        minimumSize: Size.zero,
+                                                        tapTargetSize:
+                                                            MaterialTapTargetSize
+                                                                .shrinkWrap,
+                                                      ),
+                                                      child: const Text('More'),
+                                                    ),
+                                                  IconButton(
+                                                    tooltip: 'Hide suggestions',
+                                                    visualDensity:
+                                                        VisualDensity.compact,
+                                                    iconSize: 18,
+                                                    onPressed: () {
+                                                      setState(() {
+                                                        _suggestionsDismissed =
+                                                            true;
+                                                      });
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.close_rounded,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              SizedBox(
+                                                height: 40,
+                                                child: ListView.separated(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  itemCount:
+                                                      _primaryInlineSuggestions
+                                                          .length,
+                                                  separatorBuilder: (_, __) =>
+                                                      const SizedBox(width: 8),
+                                                  itemBuilder: (context, index) {
+                                                    final suggestion =
+                                                        _primaryInlineSuggestions[index];
+                                                    return ActionChip(
+                                                      avatar: Icon(
+                                                        _suggestionIconFor(
+                                                          suggestion,
+                                                        ),
+                                                        size: 16,
+                                                        color: cs.primary,
+                                                      ),
+                                                      label: ConstrainedBox(
+                                                        constraints: BoxConstraints(
+                                                          maxWidth:
+                                                              _hasStartedConversation
+                                                              ? 210
+                                                              : 240,
+                                                        ),
+                                                        child: _SuggestionText(
+                                                          suggestion:
+                                                              suggestion,
+                                                          query:
+                                                              _inputController
+                                                                  .text
+                                                                  .trim(),
+                                                        ),
+                                                      ),
+                                                      onPressed: _isProcessing
+                                                          ? null
+                                                          : () =>
+                                                                _insertSuggestion(
+                                                                  suggestion,
+                                                                ),
+                                                      side: BorderSide(
+                                                        color:
+                                                            cs.outlineVariant,
+                                                      ),
+                                                      backgroundColor: cs
+                                                          .surfaceContainerLowest,
+                                                      pressElevation: 0,
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (_editingUserMessageIndex !=
+                                        null) ...<Widget>[
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 10,
+                                        ),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 10,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: cs.surfaceContainerLowest,
+                                            color: cs.surfaceContainerHighest,
                                             borderRadius: BorderRadius.circular(
-                                              18,
+                                              16,
                                             ),
                                             border: Border.all(
                                               color: cs.outlineVariant,
                                             ),
                                           ),
-                                          child: ListView.separated(
-                                            shrinkWrap: true,
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 6,
-                                            ),
-                                            itemCount:
-                                                _inlineSuggestions.length,
-                                            separatorBuilder: (_, __) =>
-                                                Divider(
-                                                  height: 1,
-                                                  color: cs.outlineVariant
-                                                      .withValues(alpha: 0.45),
-                                                ),
-                                            itemBuilder: (context, index) {
-                                              final suggestion =
-                                                  _inlineSuggestions[index];
-                                              return ListTile(
-                                                dense: true,
-                                                leading: Icon(
-                                                  _suggestionIconFor(
-                                                    suggestion,
-                                                  ),
-                                                  color: cs.primary,
-                                                ),
-                                                title: _SuggestionText(
-                                                  suggestion: suggestion,
-                                                  query: _inputController.text
-                                                      .trim(),
-                                                ),
-                                                onTap: _isProcessing
-                                                    ? null
-                                                    : () => _sendMessage(
-                                                        suggestion,
+                                          child: Row(
+                                            children: <Widget>[
+                                              Icon(
+                                                Icons.edit_rounded,
+                                                size: 16,
+                                                color: cs.primary,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'Editing your message',
+                                                  style: text.bodySmall
+                                                      ?.copyWith(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w700,
                                                       ),
-                                              );
-                                            },
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed:
+                                                    _cancelEditingUserMessage,
+                                                style: TextButton.styleFrom(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize:
+                                                      MaterialTapTargetSize
+                                                          .shrinkWrap,
+                                                ),
+                                                child: const Text('Cancel'),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
@@ -749,10 +1179,12 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                                       maxLines: 4,
                                       textInputAction: TextInputAction.send,
                                       onChanged: _updateInlineSuggestions,
-                                      onSubmitted: (_) => _sendMessage(),
+                                      onSubmitted: (_) => _submitComposer(),
                                       decoration: InputDecoration(
                                         hintText:
-                                            'Ask about your budget, spending, or tell me what to do',
+                                            _editingUserMessageIndex == null
+                                            ? 'Ask about your budget, spending, or tell me what to do'
+                                            : 'Update your question before sending it again',
                                         border: InputBorder.none,
                                         hintStyle: text.bodyMedium?.copyWith(
                                           color: cs.onSurfaceVariant,
@@ -766,12 +1198,16 @@ class _FinancialAssistantScreenState extends State<FinancialAssistantScreen>
                               FilledButton(
                                 onPressed: _isProcessing
                                     ? null
-                                    : () => _sendMessage(),
+                                    : () => _submitComposer(),
                                 style: FilledButton.styleFrom(
                                   shape: const CircleBorder(),
                                   padding: const EdgeInsets.all(14),
                                 ),
-                                child: const Icon(Icons.arrow_upward_rounded),
+                                child: Icon(
+                                  _editingUserMessageIndex == null
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.check_rounded,
+                                ),
                               ),
                             ],
                           ),
@@ -810,18 +1246,21 @@ class _ChatMessage {
   _ChatMessage.user(this.text)
     : isUser = true,
       facts = const <FinancialAssistantFact>[],
-      pendingAction = null;
+      pendingAction = null,
+      contextSnapshot = null;
 
   _ChatMessage.assistant({
     required this.text,
     this.facts = const <FinancialAssistantFact>[],
     this.pendingAction,
+    this.contextSnapshot,
   }) : isUser = false;
 
   final bool isUser;
   final String text;
   final List<FinancialAssistantFact> facts;
   final FinancialAssistantPendingAction? pendingAction;
+  final FinancialAssistantConversationContext? contextSnapshot;
   bool isResolved = false;
 
   Map<String, Object?> toJson(FinancialAssistantService service) {
@@ -840,6 +1279,9 @@ class _ChatMessage {
       'pendingAction': pendingAction == null
           ? null
           : service.encodePendingAction(pendingAction!),
+      'contextSnapshot': contextSnapshot == null
+          ? null
+          : service.encodeConversationContext(contextSnapshot!),
       'isResolved': isResolved,
     };
   }
@@ -864,6 +1306,11 @@ class _ChatMessage {
             Map<String, dynamic>.from(json['pendingAction'] as Map),
           )
         : null;
+    final contextSnapshot = json['contextSnapshot'] is Map
+        ? service.decodeConversationContext(
+            Map<String, dynamic>.from(json['contextSnapshot'] as Map),
+          )
+        : null;
 
     final message = isUser
         ? _ChatMessage.user(json['text'] as String? ?? '')
@@ -871,6 +1318,7 @@ class _ChatMessage {
             text: json['text'] as String? ?? '',
             facts: facts,
             pendingAction: pendingAction,
+            contextSnapshot: contextSnapshot,
           );
     message.isResolved = json['isResolved'] as bool? ?? false;
     return message;
@@ -885,8 +1333,16 @@ class _SuggestionText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseStyle = Theme.of(context).textTheme.bodyMedium;
-    final highlightStyle = baseStyle?.copyWith(fontWeight: FontWeight.w800);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final baseStyle = theme.textTheme.bodySmall?.copyWith(color: cs.onSurface);
+
+    final highlightStyle = baseStyle?.copyWith(
+      color: cs.primary,
+      fontWeight: FontWeight.w800,
+    );
+
     final normalizedSuggestion = suggestion.toLowerCase();
     final tokens = query
         .toLowerCase()
@@ -895,16 +1351,24 @@ class _SuggestionText extends StatelessWidget {
         .toList();
 
     if (tokens.isEmpty) {
-      return Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis);
+      return Text(
+        suggestion,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: baseStyle,
+      );
     }
 
     final spans = <TextSpan>[];
     var cursor = 0;
+
     while (cursor < suggestion.length) {
       var bestStart = suggestion.length;
       var bestToken = '';
+
       for (final token in tokens) {
         final index = normalizedSuggestion.indexOf(token, cursor);
+
         if (index >= 0 && index < bestStart) {
           bestStart = index;
           bestToken = token;
@@ -933,13 +1397,14 @@ class _SuggestionText extends StatelessWidget {
           style: highlightStyle,
         ),
       );
+
       cursor = bestStart + bestToken.length;
     }
 
     return RichText(
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      text: TextSpan(children: spans, style: baseStyle),
+      text: TextSpan(style: baseStyle, children: spans),
     );
   }
 }
@@ -947,6 +1412,7 @@ class _SuggestionText extends StatelessWidget {
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({
     required this.message,
+    this.onEditUserMessage,
     this.onIncreaseDuplicateQuantity,
     this.onEdit,
     this.onConfirm,
@@ -954,6 +1420,7 @@ class _ChatBubble extends StatelessWidget {
   });
 
   final _ChatMessage message;
+  final VoidCallback? onEditUserMessage;
   final VoidCallback? onIncreaseDuplicateQuantity;
   final VoidCallback? onEdit;
   final VoidCallback? onConfirm;
@@ -976,26 +1443,130 @@ class _ChatBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: align,
         children: <Widget>[
-          Container(
-            constraints: const BoxConstraints(maxWidth: 560),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(22),
-                topRight: const Radius.circular(22),
-                bottomLeft: Radius.circular(message.isUser ? 22 : 8),
-                bottomRight: Radius.circular(message.isUser ? 8 : 22),
+          Row(
+            mainAxisAlignment: message.isUser
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              // if (message.isUser && onEditUserMessage != null)
+              //   Padding(
+              //     padding: const EdgeInsets.only(right: 6, bottom: 4),
+              //     child: IconButton(
+              //       onPressed: onEditUserMessage,
+              //       tooltip: 'Edit message',
+              //       visualDensity: VisualDensity.compact,
+              //       iconSize: 18,
+              //       style: IconButton.styleFrom(
+              //         backgroundColor: cs.surfaceContainerHighest,
+              //         foregroundColor: cs.onSurfaceVariant,
+              //       ),
+              //       icon: const Icon(Icons.edit_outlined),
+              //     ),
+              //   ),
+              Flexible(
+                child: GestureDetector(
+                  onLongPress: onEditUserMessage == null
+                      ? null
+                      : () async {
+                          final action = await showModalBottomSheet<String>(
+                            context: context,
+                            showDragHandle: true,
+                            builder: (sheetContext) {
+                              final sheetText = Theme.of(
+                                sheetContext,
+                              ).textTheme;
+                              return SafeArea(
+                                top: false,
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    4,
+                                    20,
+                                    20,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        'Message options',
+                                        style: sheetText.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: const Icon(
+                                          Icons.edit_outlined,
+                                        ),
+                                        title: const Text('Edit sent message'),
+                                        subtitle: const Text(
+                                          'Update this question and generate a new answer.',
+                                        ),
+                                        onTap: () {
+                                          Navigator.of(
+                                            sheetContext,
+                                          ).pop('edit');
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                          if (action == 'edit') {
+                            onEditUserMessage!();
+                          }
+                        },
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(22),
+                        topRight: const Radius.circular(22),
+                        bottomLeft: Radius.circular(message.isUser ? 22 : 8),
+                        bottomRight: Radius.circular(message.isUser ? 8 : 22),
+                      ),
+                      border: message.isUser
+                          ? null
+                          : Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Text(
+                      message.text,
+                      style: text.bodyMedium?.copyWith(
+                        color: foreground,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              border: message.isUser
-                  ? null
-                  : Border.all(color: cs.outlineVariant),
-            ),
-            child: Text(
-              message.text,
-              style: text.bodyMedium?.copyWith(color: foreground, height: 1.45),
-            ),
+            ],
           ),
+          // if (message.isUser && onEditUserMessage != null)
+          //   Padding(
+          //     padding: const EdgeInsets.only(top: 4),
+          //     child: TextButton.icon(
+          //       onPressed: onEditUserMessage,
+          //       style: TextButton.styleFrom(
+          //         padding: const EdgeInsets.symmetric(
+          //           horizontal: 10,
+          //           vertical: 6,
+          //         ),
+          //         minimumSize: Size.zero,
+          //         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          //         foregroundColor: cs.onSurfaceVariant,
+          //       ),
+          //       icon: const Icon(Icons.edit_outlined, size: 16),
+          //       label: const Text('Edit'),
+          //     ),
+          //   ),
           if (message.facts.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),

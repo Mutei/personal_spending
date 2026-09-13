@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../localization/demo_localization.dart';
 import '../localization/language_constants.dart';
 import '../models/spending_notification.dart';
+import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import 'other_spending_provider.dart';
 import 'spending_provider.dart';
@@ -19,6 +22,8 @@ class NotificationCenterProvider extends ChangeNotifier {
   String? _uid;
   final List<SpendingNotification> _notifications = <SpendingNotification>[];
   final Set<String> _deletedIds = <String>{};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _notificationSubscription;
   bool _isLoaded = false;
   bool _syncInProgress = false;
   String _languageCode = english;
@@ -34,6 +39,8 @@ class NotificationCenterProvider extends ChangeNotifier {
   Future<void> attachUser(String? uid) async {
     if (_uid == uid && _isLoaded) return;
 
+    await _notificationSubscription?.cancel();
+    _notificationSubscription = null;
     _uid = uid;
     _notifications.clear();
     _deletedIds.clear();
@@ -80,7 +87,8 @@ class NotificationCenterProvider extends ChangeNotifier {
 
     _purgeExpiredNotifications();
     _isLoaded = true;
-    await _save();
+    await _saveLocalCache();
+    _subscribeToBackend(uid);
     notifyListeners();
   }
 
@@ -137,7 +145,7 @@ class NotificationCenterProvider extends ChangeNotifier {
       await _scheduleUpcomingNotifications(spending: spending, other: other);
 
       if (changed) {
-        await _save();
+        await _persistState(notifyBackend: true);
         notifyListeners();
       }
     } finally {
@@ -146,26 +154,42 @@ class NotificationCenterProvider extends ChangeNotifier {
   }
 
   Future<void> markAsRead(String notificationId) async {
-    final index = _notifications.indexWhere(
-      (item) => item.id == notificationId,
-    );
-    if (index == -1 || _notifications[index].isRead) return;
-
-    _notifications[index] = _notifications[index].copyWith(isRead: true);
-    await _save();
-    notifyListeners();
+    await markNotificationsAsRead(<String>[notificationId]);
   }
 
   Future<void> markAllAsRead() async {
-    var changed = false;
+    await markNotificationsAsRead(
+      _notifications.where((item) => !item.isRead).map((item) => item.id),
+    );
+  }
+
+  Future<void> markNotificationsAsRead(Iterable<String> notificationIds) async {
+    final ids = notificationIds.toSet();
+    if (ids.isEmpty) return;
+
+    final unreadIds = _notifications
+        .where((item) => ids.contains(item.id) && !item.isRead)
+        .map((item) => item.id)
+        .toSet();
+    if (unreadIds.isEmpty) return;
+
+    final readAt = DateTime.now();
     for (var i = 0; i < _notifications.length; i++) {
-      if (_notifications[i].isRead) continue;
-      _notifications[i] = _notifications[i].copyWith(isRead: true);
-      changed = true;
+      final current = _notifications[i];
+      if (!unreadIds.contains(current.id) || current.isRead) continue;
+      _notifications[i] = current.copyWith(isRead: true, readAt: readAt);
     }
-    if (!changed) return;
-    await _save();
+
+    await _persistState(notifyBackend: false);
     notifyListeners();
+
+    final uid = _uid;
+    if (uid == null) return;
+    await FirestoreService.instance.markNotificationCenterItemsRead(
+      uid: uid,
+      notificationIds: unreadIds,
+      readAt: readAt,
+    );
   }
 
   Future<List<String>> sendTestSpendingNotifications({
@@ -264,8 +288,17 @@ class NotificationCenterProvider extends ChangeNotifier {
       await NotificationService.cancelNotificationByKey(id);
     }
 
-    await _save();
+    await _persistState(notifyBackend: false);
     notifyListeners();
+
+    final uid = _uid;
+    if (uid != null) {
+      await FirestoreService.instance.softDeleteNotificationCenterItems(
+        uid: uid,
+        notificationIds: idsToDelete,
+        deletedAt: DateTime.now(),
+      );
+    }
   }
 
   bool _upsertDailyReportNotification({
@@ -685,7 +718,84 @@ class NotificationCenterProvider extends ChangeNotifier {
     return _tr("Tomorrow's budget is ready");
   }
 
-  Future<void> _save() async {
+  void _subscribeToBackend(String uid) {
+    _notificationSubscription = FirestoreService.instance
+        .watchNotificationCenter(uid)
+        .listen((snapshot) async {
+          if (snapshot.docs.isEmpty &&
+              (_notifications.isNotEmpty || _deletedIds.isNotEmpty)) {
+            await _pushCurrentStateToBackend(uid);
+            return;
+          }
+
+          _applyBackendSnapshot(snapshot.docs);
+          await _saveLocalCache();
+          notifyListeners();
+        });
+  }
+
+  void _applyBackendSnapshot(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final nextNotifications = <SpendingNotification>[];
+    final nextDeletedIds = <String>{};
+    final now = DateTime.now();
+
+    for (final doc in docs) {
+      final raw = Map<String, dynamic>.from(doc.data());
+      final id = (raw['id'] as String?) ?? doc.id;
+      raw['id'] = id;
+
+      final deletedAtRaw = raw['deletedAt'] as String?;
+      if (deletedAtRaw != null && deletedAtRaw.isNotEmpty) {
+        nextDeletedIds.add(id);
+        continue;
+      }
+
+      final notification = SpendingNotification.fromJson(raw);
+      if (!notification.expiresAt.isAfter(now)) {
+        continue;
+      }
+      nextNotifications.add(notification);
+    }
+
+    _notifications
+      ..clear()
+      ..addAll(nextNotifications);
+    _deletedIds
+      ..clear()
+      ..addAll(nextDeletedIds);
+  }
+
+  Future<void> _pushCurrentStateToBackend(String uid) async {
+    final payload = <Map<String, dynamic>>[
+      ..._notifications.map((item) {
+        final json = item.toJson()..removeWhere((_, value) => value == null);
+        return json;
+      }),
+      ..._deletedIds.map(
+        (id) => <String, dynamic>{
+          'id': id,
+          'deletedAt': DateTime.now().toIso8601String(),
+        },
+      ),
+    ];
+    if (payload.isEmpty) return;
+
+    await FirestoreService.instance.upsertNotificationCenterItems(
+      uid: uid,
+      notifications: payload,
+    );
+  }
+
+  Future<void> _persistState({required bool notifyBackend}) async {
+    await _saveLocalCache();
+    final uid = _uid;
+    if (!notifyBackend || uid == null) return;
+    await _pushCurrentStateToBackend(uid);
+  }
+
+  Future<void> _saveLocalCache() async {
     final uid = _uid;
     if (uid == null) return;
 
@@ -753,4 +863,10 @@ class NotificationCenterProvider extends ChangeNotifier {
 
   bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    super.dispose();
+  }
 }

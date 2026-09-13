@@ -18,6 +18,8 @@ class SpendingNotification {
   final DateTime timestamp;
   final DateTime expiresAt;
   final bool isRead;
+  final DateTime? readAt;
+  final DateTime? deletedAt;
   final DateTime? reportDate;
   final String? parentId;
 
@@ -29,6 +31,8 @@ class SpendingNotification {
     required this.timestamp,
     required this.expiresAt,
     this.isRead = false,
+    this.readAt,
+    this.deletedAt,
     this.reportDate,
     this.parentId,
   });
@@ -41,6 +45,8 @@ class SpendingNotification {
     DateTime? timestamp,
     DateTime? expiresAt,
     bool? isRead,
+    DateTime? readAt,
+    DateTime? deletedAt,
     DateTime? reportDate,
     String? parentId,
   }) {
@@ -52,6 +58,8 @@ class SpendingNotification {
       timestamp: timestamp ?? this.timestamp,
       expiresAt: expiresAt ?? this.expiresAt,
       isRead: isRead ?? this.isRead,
+      readAt: readAt ?? this.readAt,
+      deletedAt: deletedAt ?? this.deletedAt,
       reportDate: reportDate ?? this.reportDate,
       parentId: parentId ?? this.parentId,
     );
@@ -65,6 +73,8 @@ class SpendingNotification {
     'timestamp': timestamp.toIso8601String(),
     'expiresAt': expiresAt.toIso8601String(),
     'isRead': isRead,
+    'readAt': readAt?.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
     'reportDate': reportDate?.toIso8601String(),
     'parentId': parentId,
   };
@@ -85,6 +95,12 @@ class SpendingNotification {
       timestamp: DateTime.parse(json['timestamp'] as String),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       isRead: (json['isRead'] as bool?) ?? false,
+      readAt: json['readAt'] != null
+          ? DateTime.parse(json['readAt'] as String)
+          : null,
+      deletedAt: json['deletedAt'] != null
+          ? DateTime.parse(json['deletedAt'] as String)
+          : null,
       reportDate: json['reportDate'] != null
           ? DateTime.parse(json['reportDate'] as String)
           : null,

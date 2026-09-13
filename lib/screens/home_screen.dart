@@ -58,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   DateTime _selectedDate = DateTime.now();
   final _dateFormat = DateFormat('yyyy-MM-dd');
+  final _weekdayFormat = DateFormat('EEEE');
 
   @override
   void initState() {
@@ -140,8 +141,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openFinancialAssistant(BuildContext context) async {
-    Navigator.pop(context);
-
     final authSucceeded = await context.read<AppLockService>().authenticate(
       localizedReason: getTranslated(
         context,
@@ -179,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final fmt = DateFormat('yyyy-MM-dd');
+    final fmt = DateFormat('EEE, yyyy-MM-dd');
 
     final double budget = provider.monthlyBudget;
     final double periodTotal = provider.periodTotal;
@@ -333,6 +332,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           HomeSheets.showNotificationPreferencesSheet(context, provider);
         },
         onOpenFinancialAssistant: () async {
+          Navigator.pop(context);
           await _openFinancialAssistant(context);
         },
         onSetBudget: () async {
@@ -773,7 +773,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     const SizedBox(height: 14),
                     ...upcomingRecurring.take(3).map((payment) {
                       final dueDate = provider.getNextDueDate(payment);
-                      final dueStr = DateFormat('MMM d').format(dueDate);
+                      final dueStr = DateFormat('EEE, MMM d').format(dueDate);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Container(
@@ -1235,10 +1235,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _dateFormat.format(_selectedDate),
+                      _weekdayFormat.format(_selectedDate),
                       textAlign: TextAlign.center,
                       style: text.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _dateFormat.format(_selectedDate),
+                      textAlign: TextAlign.center,
+                      style: text.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ],

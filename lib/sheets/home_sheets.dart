@@ -1196,7 +1196,7 @@ class HomeSheets {
     String bankSelection = _noBankValue;
 
     DateTime selectedDate = initialDate;
-    final dateFormat = DateFormat('yyyy-MM-dd');
+    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
 
     showModalBottomSheet(
       context: context,
@@ -1573,7 +1573,7 @@ class HomeSheets {
     final sourceController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = initialDate;
-    final dateFormat = DateFormat('yyyy-MM-dd');
+    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
 
     showModalBottomSheet(
       context: context,
@@ -1734,7 +1734,7 @@ class HomeSheets {
   ) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final dateFormat = DateFormat('yyyy-MM-dd');
+    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
 
     final titleController = TextEditingController();
     final amountController = TextEditingController();
@@ -1823,7 +1823,7 @@ class HomeSheets {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Create repeating payments like rent, subscriptions, and weekly transport. If auto-add is on, the app records the spending automatically when it becomes due.',
+                        'Schedule monthly, weekly, or one-time payments. If auto-add is on, the app records the spending automatically when it becomes due.',
                         style: text.bodySmall,
                       ),
                     ),
@@ -1841,11 +1841,12 @@ class HomeSheets {
                       const SizedBox(height: 8),
                       ...list.map((payment) {
                         final due = provider.getNextDueDate(payment);
-                        final dueStr = DateFormat('MMM d').format(due);
-                        final frequencyLabel =
-                            payment.frequency == RecurringFrequency.weekly
-                            ? 'Weekly'
-                            : 'Monthly';
+                        final dueStr = DateFormat('EEE, MMM d').format(due);
+                        final frequencyLabel = switch (payment.frequency) {
+                          RecurringFrequency.monthly => 'Monthly',
+                          RecurringFrequency.weekly => 'Weekly',
+                          RecurringFrequency.once => 'Once',
+                        };
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(12),
@@ -1875,9 +1876,12 @@ class HomeSheets {
                                     ),
                                     Text(
                                       payment.frequency ==
-                                              RecurringFrequency.weekly
+                                              RecurringFrequency.monthly
+                                          ? '$frequencyLabel - day ${payment.dayOfMonth} - next: $dueStr'
+                                          : payment.frequency ==
+                                                RecurringFrequency.weekly
                                           ? '$frequencyLabel - starts ${dateFormat.format(payment.startDate)} - next: $dueStr'
-                                          : '$frequencyLabel - day ${payment.dayOfMonth} - next: $dueStr',
+                                          : '$frequencyLabel - due $dueStr',
                                       style: text.bodySmall,
                                     ),
                                     if (payment.category != null &&
@@ -1980,6 +1984,10 @@ class HomeSheets {
                           value: RecurringFrequency.weekly,
                           child: Text('Weekly'),
                         ),
+                        DropdownMenuItem(
+                          value: RecurringFrequency.once,
+                          child: Text('Once'),
+                        ),
                       ],
                       onChanged: (value) {
                         if (value == null) return;
@@ -2008,8 +2016,11 @@ class HomeSheets {
                         });
                       },
                       child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Start date',
+                        decoration: InputDecoration(
+                          labelText:
+                              selectedFrequency == RecurringFrequency.once
+                              ? 'Due date'
+                              : 'Start date',
                           border: OutlineInputBorder(),
                         ),
                         child: Row(
@@ -2039,7 +2050,9 @@ class HomeSheets {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Weekly payments repeat every 7 days starting from the selected start date.',
+                          selectedFrequency == RecurringFrequency.weekly
+                              ? 'Weekly payments repeat every 7 days starting from the selected start date.'
+                              : 'This payment is scheduled once on the selected due date.',
                           style: text.bodySmall,
                         ),
                       ),
@@ -2226,7 +2239,7 @@ class HomeSheets {
     final categoryController = TextEditingController(
       text: entry.category ?? '',
     );
-    final dateFormat = DateFormat('yyyy-MM-dd');
+    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
     DateTime selectedDate = date;
     String bankSelection =
         provider.findBankAccountId(

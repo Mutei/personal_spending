@@ -1254,36 +1254,6 @@ class FinancialAssistantService {
       );
     }
 
-    final specificDate = _extractSpecificDate(normalized, now);
-    if (specificDate != null &&
-        _matchesAny(normalized, const <String>[
-          'show my spending',
-          'how much did i spend',
-          'spent on',
-          'spending for',
-        ])) {
-      final total = provider.getSpendingForDate(specificDate);
-      final entries = provider.getEntriesForDate(specificDate);
-      final selection = entries.isNotEmpty
-          ? FinancialAssistantSpendingSelection(
-              date: specificDate,
-              index: entries.length - 1,
-              entry: entries.last,
-            )
-          : null;
-      return FinancialAssistantReply(
-        message: 'Here is your spending for that date.',
-        facts: <FinancialAssistantFact>[
-          FinancialAssistantFact(
-            label: DateFormat('yyyy-MM-dd').format(specificDate),
-            value: '${total.toStringAsFixed(2)} SAR',
-            note: '${entries.length} entr${entries.length == 1 ? 'y' : 'ies'}',
-          ),
-        ],
-        context: context.copyWith(lastSpendingSelection: selection),
-      );
-    }
-
     if (_matchesAny(normalized, const <String>[
       'explain why my available daily budget increased',
       'explain why my available daily budget decreased',
@@ -3837,12 +3807,7 @@ class FinancialAssistantService {
     DateTime now,
   ) {
     final mentionsSpending =
-        normalized.contains('spent') ||
-        normalized.contains('spending') ||
-        normalized.contains('pay') ||
-        normalized.contains('paid') ||
-        normalized.contains('purchase') ||
-        normalized.contains('bought') ||
+        _looksLikeSpendingHistoryIntent(normalized, now: now) ||
         normalized.contains("today's spending") ||
         normalized.contains('yesterday spending');
     final isFollowUp =
@@ -4047,7 +4012,7 @@ class FinancialAssistantService {
     }
 
     final explicitRangeMatch = RegExp(
-      r'(?:from\s+)?((?:\d{4}-\d{2}-\d{2})|(?:[a-z]+\s+\d{1,2}(?:,\s*\d{4})?))\s+(?:to|through|until|-)\s+((?:\d{4}-\d{2}-\d{2})|(?:[a-z]+\s+\d{1,2}(?:,\s*\d{4})?))',
+      r'(?:from\s+|between\s+)?((?:\d{4}-\d{2}-\d{2})|(?:[a-z]+\s+\d{1,2}(?:,\s*\d{4})?))\s+(?:to|through|until|and|-)\s+((?:\d{4}-\d{2}-\d{2})|(?:[a-z]+\s+\d{1,2}(?:,\s*\d{4})?))',
       caseSensitive: false,
     ).firstMatch(normalized);
     if (explicitRangeMatch != null) {
@@ -4581,6 +4546,49 @@ class FinancialAssistantService {
       if (text.contains(pattern)) return true;
     }
     return false;
+  }
+
+  bool _looksLikeSpendingHistoryIntent(String normalized, {DateTime? now}) {
+    final hasSpendingVerb = RegExp(
+      r'\b(spend|spent|spending|pay|paid|purchase|purchased|buy|bought)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+    final asksForSpending = RegExp(
+      r'\b(how much|what did i|show|list|total)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+    final hasSpendingObject = RegExp(
+      r'\b(spending|purchases|transactions|entries)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+    final mentionsPeriod = now != null && _dateHints(normalized, now);
+    final hasFilter =
+        _resolveCategoryTokens(normalized) != null ||
+        _resolveBankTokens(normalized);
+
+    if (hasSpendingVerb && (asksForSpending || mentionsPeriod || hasFilter)) {
+      return true;
+    }
+    if (asksForSpending && (hasSpendingObject || mentionsPeriod || hasFilter)) {
+      return true;
+    }
+    return false;
+  }
+
+  String? _resolveCategoryTokens(String normalized) {
+    final explicitMatch = RegExp(
+      r'(?:category\s*(?:is|:)\s*|on\s+|for\s+)([a-z][a-z0-9\s&/-]{1,40})',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    final value = explicitMatch?.group(1)?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  bool _resolveBankTokens(String normalized) {
+    return RegExp(
+      r'\b(?:bank|account|card|using|with|from)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized);
   }
 
   String _normalize(String input) {

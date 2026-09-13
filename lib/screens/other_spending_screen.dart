@@ -42,7 +42,7 @@ class _OtherSpendingScreenState extends State<OtherSpendingScreen> {
     final provider = context.watch<OtherSpendingProvider>();
     final spendingProvider = context.watch<SpendingProvider>();
     final text = Theme.of(context).textTheme;
-    final fmt = DateFormat('yyyy-MM-dd');
+    final fmt = DateFormat('EEE, yyyy-MM-dd');
 
     final syncToken = [
       spendingProvider.periodTotal.toStringAsFixed(2),
