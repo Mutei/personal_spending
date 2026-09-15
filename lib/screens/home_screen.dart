@@ -58,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   DateTime _selectedDate = DateTime.now();
   final _dateFormat = DateFormat('yyyy-MM-dd');
-  final _weekdayFormat = DateFormat('EEEE');
 
   @override
   void initState() {
@@ -178,7 +177,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final fmt = DateFormat('EEE, yyyy-MM-dd');
+    final locale = Localizations.localeOf(context).languageCode;
+    final fmt = DateFormat('EEE, yyyy-MM-dd', locale);
 
     final double budget = provider.monthlyBudget;
     final double periodTotal = provider.periodTotal;
@@ -197,7 +197,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       categoryUsageCounts,
     );
     final avgPerDay = provider.getAveragePerDayInPeriod();
-    final recs = provider.getSmartRecommendations();
+    final recs = provider.getSmartRecommendations(
+      translate: (key, args) => getTranslatedWithArgs(context, key, args),
+    );
 
     // ---- Income / forecast / recurring ----
     final periodIncome = provider.periodIncomeTotal;
@@ -205,7 +207,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final projectedTotal = provider.getProjectedPeriodTotal();
     final projectedDiff = projectedTotal - budget;
     final daysLeftInPeriod = provider.getDaysLeftInPeriod();
-    final forecastMessages = provider.getForecastMessages();
+    final forecastMessages = provider.getForecastMessages(
+      translate: (key, args) => getTranslatedWithArgs(context, key, args),
+    );
     final upcomingRecurring = provider.getUpcomingRecurringPayments();
 
     final user = auth.currentUser;
@@ -417,7 +421,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Set the range you want the dashboard to analyze and track.',
+                            getTranslated(
+                              context,
+                              'Set the range you want the dashboard to analyze and track.',
+                            ),
                             style: text.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -470,14 +477,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Financial Assistant',
+                          getTranslated(context, 'Financial Assistant'),
                           style: text.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Ask about spending, budget, recurring payments, reports, and quick actions in one place.',
+                          getTranslated(
+                            context,
+                            'Ask about spending, budget, recurring payments, reports, and quick actions in one place.',
+                          ),
                           style: text.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                             height: 1.35,
@@ -492,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       await _openFinancialAssistant(context);
                     },
                     icon: const Icon(Icons.arrow_forward_rounded),
-                    label: const Text('Open'),
+                    label: Text(getTranslated(context, 'Open')),
                   ),
                 ],
               ),
@@ -523,7 +533,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Period Overview',
+                      getTranslated(context, 'Period Overview'),
                       style: text.titleLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -531,7 +541,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'A quick pulse on this period before you dive into the details.',
+                      getTranslated(
+                        context,
+                        'A quick pulse on this period before you dive into the details.',
+                      ),
                       style: text.bodySmall?.copyWith(
                         color: Colors.white.withValues(alpha: 0.82),
                       ),
@@ -560,7 +573,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             ),
                             Text(
-                              'used',
+                              getTranslated(context, 'used'),
                               style: text.bodySmall?.copyWith(
                                 color: Colors.white.withValues(alpha: 0.82),
                               ),
@@ -575,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Expanded(
                           child: _secureInfoColumn(
                             context,
-                            title: 'Budget',
+                            title: getTranslated(context, 'Budget'),
                             value: budget,
                           ),
                         ),
@@ -583,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Expanded(
                           child: _secureInfoColumn(
                             context,
-                            title: 'Spent',
+                            title: getTranslated(context, 'Spent'),
                             value: periodTotal,
                           ),
                         ),
@@ -591,7 +604,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Expanded(
                           child: _secureInfoColumn(
                             context,
-                            title: 'Remaining',
+                            title: getTranslated(context, 'Remaining'),
                             value: remaining,
                           ),
                         ),
@@ -609,9 +622,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     _sectionHeader(
                       context,
-                      title: 'Bank balances',
-                      subtitle:
-                          'Live budget context across your saved accounts.',
+                      title: getTranslated(context, 'Bank balances'),
+                      subtitle: getTranslated(
+                        context,
+                        'Live budget context across your saved accounts.',
+                      ),
                       icon: Icons.account_balance_rounded,
                       trailing: Text(
                         valuesLocked
@@ -681,23 +696,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     _sectionHeader(
                       context,
-                      title: 'Forecast',
+                      title: getTranslated(context, 'Forecast'),
                       subtitle: daysLeftInPeriod > 0
-                          ? "Based on your current pace, here's how this period may end."
-                          : 'This period has ended or is about to end.',
+                          ? getTranslated(
+                              context,
+                              "Based on your current pace, here's how this period may end.",
+                            )
+                          : getTranslated(
+                              context,
+                              'This period has ended or is about to end.',
+                            ),
                       icon: Icons.trending_up_rounded,
                     ),
                     const SizedBox(height: 14),
                     _infoRow(
                       context,
-                      label: 'Projected total',
+                      label: getTranslated(context, 'Projected total'),
                       value: projectedTotal.toStringAsFixed(2),
                     ),
                     if (budget > 0) ...[
                       const SizedBox(height: 10),
                       _infoRow(
                         context,
-                        label: 'Vs. budget',
+                        label: getTranslated(context, 'Vs. budget'),
                         value: projectedDiff >= 0
                             ? '+${projectedDiff.toStringAsFixed(2)}'
                             : '-${(-projectedDiff).toStringAsFixed(2)}',
@@ -729,27 +750,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     _sectionHeader(
                       context,
-                      title: 'Income vs Expenses',
-                      subtitle:
-                          'A cleaner view of how much came in and went out.',
+                      title: getTranslated(context, 'Income vs Expenses'),
+                      subtitle: getTranslated(
+                        context,
+                        'A cleaner view of how much came in and went out.',
+                      ),
                       icon: Icons.account_balance_wallet_rounded,
                     ),
                     const SizedBox(height: 14),
                     _infoRow(
                       context,
-                      label: 'Income this period',
+                      label: getTranslated(context, 'Income this period'),
                       value: periodIncome.toStringAsFixed(2),
                     ),
                     const SizedBox(height: 10),
                     _infoRow(
                       context,
-                      label: 'Expenses this period',
+                      label: getTranslated(context, 'Expenses this period'),
                       value: periodTotal.toStringAsFixed(2),
                     ),
                     const SizedBox(height: 10),
                     _infoRow(
                       context,
-                      label: 'Savings rate',
+                      label: getTranslated(context, 'Savings rate'),
                       value: '${savingsRate.toStringAsFixed(1)}%',
                       valueColor: savingsRate >= 0 ? Colors.green : Colors.red,
                     ),
@@ -765,15 +788,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   children: [
                     _sectionHeader(
                       context,
-                      title: 'Upcoming recurring payments',
-                      subtitle:
-                          'The next scheduled items that may affect your budget.',
+                      title: getTranslated(
+                        context,
+                        'Upcoming recurring payments',
+                      ),
+                      subtitle: getTranslated(
+                        context,
+                        'The next scheduled items that may affect your budget.',
+                      ),
                       icon: Icons.event_repeat_rounded,
                     ),
                     const SizedBox(height: 14),
                     ...upcomingRecurring.take(3).map((payment) {
                       final dueDate = provider.getNextDueDate(payment);
-                      final dueStr = DateFormat('EEE, MMM d').format(dueDate);
+                      final dueStr = DateFormat(
+                        'EEE, MMM d',
+                        locale,
+                      ).format(dueDate);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: Container(
@@ -791,7 +822,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             children: [
                               Expanded(
                                 child: Text(
-                                  '${payment.title} • due $dueStr',
+                                  '${payment.title} • ${getTranslatedWithArgs(context, 'Due {date}', {'date': dueStr})}',
                                   overflow: TextOverflow.ellipsis,
                                   style: text.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -819,14 +850,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 18),
             _sectionHeader(
               context,
-              title: 'Entries for this date',
-              subtitle: 'Detailed activity for the selected day.',
+              title: getTranslated(context, 'Entries for this date'),
+              subtitle: getTranslated(
+                context,
+                'Detailed activity for the selected day.',
+              ),
             ),
             const SizedBox(height: 12),
             if (entries.isEmpty)
               HomeSectionCard(
                 child: Text(
-                  'No detailed entries for this date.',
+                  getTranslated(context, 'No detailed entries for this date.'),
                   style: text.bodyMedium,
                 ),
               )
@@ -862,9 +896,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 24),
             _sectionHeader(
               context,
-              title: 'Insights',
-              subtitle:
-                  'Average per day in this period: ${avgPerDay.toStringAsFixed(2)}',
+              title: getTranslated(context, 'Insights'),
+              subtitle: getTranslatedWithArgs(
+                context,
+                'Average per day in this period: {amount}',
+                {'amount': avgPerDay.toStringAsFixed(2)},
+              ),
             ),
             const SizedBox(height: 12),
             HomeSectionCard(
@@ -883,14 +920,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Top categories',
+                              getTranslated(context, 'Top categories'),
                               style: text.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Tap a category to review, edit, delete, or export its transactions.',
+                              getTranslated(
+                                context,
+                                'Tap a category to review, edit, delete, or export its transactions.',
+                              ),
                               style: text.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                                 height: 1.35,
@@ -910,7 +950,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           for (final option in _CategorySortOption.values)
                             PopupMenuItem(
                               value: option,
-                              child: Text(_categorySortLabel(option)),
+                              child: Text(_categorySortLabel(context, option)),
                             ),
                         ],
                         child: Container(
@@ -935,7 +975,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _categorySortLabel(_categorySortOption),
+                                _categorySortLabel(
+                                  context,
+                                  _categorySortOption,
+                                ),
                                 style: text.bodyMedium?.copyWith(
                                   color: cs.primary,
                                   fontWeight: FontWeight.w600,
@@ -956,7 +999,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   const SizedBox(height: 16),
                   if (sortedCategoryInsights.isEmpty)
                     Text(
-                      'No categories yet.',
+                      getTranslated(context, 'No categories yet.'),
                       style: text.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -980,14 +1023,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const SizedBox(height: 24),
             _sectionHeader(
               context,
-              title: 'Recommendations',
-              subtitle: 'Suggestions based on your recent spending patterns.',
+              title: getTranslated(context, 'Recommendations'),
+              subtitle: getTranslated(
+                context,
+                'Suggestions based on your recent spending patterns.',
+              ),
             ),
             const SizedBox(height: 12),
             if (recs.isEmpty)
               HomeSectionCard(
                 child: Text(
-                  'No recommendations yet.',
+                  getTranslated(context, 'No recommendations yet.'),
                   style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                 ),
               )
@@ -1023,7 +1069,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           );
         },
         icon: const Icon(Icons.add_rounded),
-        label: const Text("Add / Manage"),
+        label: Text(getTranslated(context, 'Add / Manage')),
       ),
     );
   }
@@ -1213,7 +1259,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               _DateNavButton(
                 icon: Icons.chevron_left_rounded,
-                tooltip: 'Previous day',
+                tooltip: getTranslated(context, 'Previous day'),
                 onTap: () {
                   setState(() {
                     _selectedDate = _selectedDate.subtract(
@@ -1228,14 +1274,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      'Spending for',
+                      getTranslated(context, 'Spending for'),
                       style: text.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _weekdayFormat.format(_selectedDate),
+                      DateFormat(
+                        'EEEE',
+                        Localizations.localeOf(context).languageCode,
+                      ).format(_selectedDate),
                       textAlign: TextAlign.center,
                       style: text.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -1255,7 +1304,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 10),
               _DateNavButton(
                 icon: Icons.chevron_right_rounded,
-                tooltip: 'Next day',
+                tooltip: getTranslated(context, 'Next day'),
                 onTap: () {
                   setState(() {
                     _selectedDate = _selectedDate.add(const Duration(days: 1));
@@ -1265,7 +1314,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(width: 8),
               _DateNavButton(
                 icon: Icons.calendar_today_rounded,
-                tooltip: 'Pick date',
+                tooltip: getTranslated(context, 'Pick date'),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
@@ -1291,8 +1340,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             child: Text(
               selectedDateTotal > 0
-                  ? 'Total spent on this date: ${selectedDateTotal.toStringAsFixed(2)}'
-                  : 'No spending recorded for this date.',
+                  ? getTranslatedWithArgs(
+                      context,
+                      'Total spent on this date: {amount}',
+                      {'amount': selectedDateTotal.toStringAsFixed(2)},
+                    )
+                  : getTranslated(
+                      context,
+                      'No spending recorded for this date.',
+                    ),
               style: text.bodyMedium,
             ),
           ),
@@ -1339,20 +1395,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return items;
   }
 
-  String _categorySortLabel(_CategorySortOption option) {
+  String _categorySortLabel(BuildContext context, _CategorySortOption option) {
     switch (option) {
       case _CategorySortOption.highestSpending:
-        return 'Highest spending';
+        return getTranslated(context, 'Highest spending');
       case _CategorySortOption.lowestSpending:
-        return 'Lowest spending';
+        return getTranslated(context, 'Lowest spending');
       case _CategorySortOption.alphabeticalAsc:
-        return 'Alphabetical A-Z';
+        return getTranslated(context, 'Alphabetical A-Z');
       case _CategorySortOption.alphabeticalDesc:
-        return 'Alphabetical Z-A';
+        return getTranslated(context, 'Alphabetical Z-A');
       case _CategorySortOption.mostUsed:
-        return 'Most used';
+        return getTranslated(context, 'Most used');
       case _CategorySortOption.leastUsed:
-        return 'Least used';
+        return getTranslated(context, 'Least used');
     }
   }
 
@@ -1435,13 +1491,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               _categoryMetaChip(
                                 context,
                                 icon: Icons.payments_outlined,
-                                label:
-                                    '${insight.total.toStringAsFixed(2)} spent',
+                                label: getTranslatedWithArgs(
+                                  context,
+                                  '{amount} spent',
+                                  {'amount': insight.total.toStringAsFixed(2)},
+                                ),
                               ),
                               _categoryMetaChip(
                                 context,
                                 icon: Icons.repeat_rounded,
-                                label: '${insight.usageCount} entries',
+                                label: getTranslatedWithArgs(
+                                  context,
+                                  '{count} entries',
+                                  {'count': '${insight.usageCount}'},
+                                ),
                               ),
                             ],
                           ),
@@ -1528,17 +1591,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .read<SecureValuesLockService>()
           .unlockWithBiometrics();
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Unlock failed")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getTranslated(context, 'Unlock failed'))),
+        );
       }
     }
 
     void lockSecureValuesAgain() {
       context.read<SecureValuesLockService>().lock();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Locked again")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getTranslated(context, 'Locked again'))),
+      );
     }
 
     return InkWell(
@@ -1591,7 +1654,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 4),
             Text(
-              locked ? 'Tap to unlock' : 'Tap to lock',
+              getTranslated(context, locked ? 'Tap to unlock' : 'Tap to lock'),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

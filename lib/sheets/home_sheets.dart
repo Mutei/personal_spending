@@ -29,7 +29,7 @@ class HomeSheets {
   static Future<String?> promptForReportTitle(
     BuildContext context, {
     required String initialTitle,
-    String helperText = 'This title will appear in the PDF report header.',
+    String? helperText,
   }) async {
     final controller = TextEditingController(text: initialTitle);
     String? errorText;
@@ -46,7 +46,11 @@ class HomeSheets {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    helperText,
+                    helperText ??
+                        getTranslated(
+                          dialogContext,
+                          'This title will appear in the PDF report header.',
+                        ),
                     style: Theme.of(dialogContext).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
@@ -107,13 +111,14 @@ class HomeSheets {
   }
 
   static List<DropdownMenuItem<String>> _bankAccountDropdownItems(
+    BuildContext context,
     SpendingProvider provider, {
     String? legacyBank,
   }) {
     final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(
+      DropdownMenuItem(
         value: _noBankValue,
-        child: Text('No payment source'),
+        child: Text(getTranslated(context, 'No payment source')),
       ),
     ];
 
@@ -123,7 +128,11 @@ class HomeSheets {
         items.add(
           DropdownMenuItem(
             value: _legacyBankValue,
-            child: Text('${legacyBank.trim()} (not saved)'),
+            child: Text(
+              getTranslatedWithArgs(context, '{name} (not saved)', {
+                'name': legacyBank.trim(),
+              }),
+            ),
           ),
         );
       }
@@ -145,11 +154,12 @@ class HomeSheets {
   }
 
   static Widget _bankAccountDropdown({
+    required BuildContext context,
     required SpendingProvider provider,
     required String value,
     required ValueChanged<String?> onChanged,
     String? legacyBank,
-    String label = 'Payment source (optional)',
+    String? label,
   }) {
     final ids = provider.bankAccounts.map((account) => account.id).toSet();
     final hasLegacy =
@@ -166,13 +176,20 @@ class HomeSheets {
       value: resolvedValue,
       isExpanded: true,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: label ?? getTranslated(context, 'Payment source (optional)'),
         border: const OutlineInputBorder(),
         helperText: provider.bankAccounts.isEmpty && !hasLegacy
-            ? 'Add bank accounts from Set Budget to select one.'
+            ? getTranslated(
+                context,
+                'Add bank accounts from Set Budget to select one.',
+              )
             : null,
       ),
-      items: _bankAccountDropdownItems(provider, legacyBank: legacyBank),
+      items: _bankAccountDropdownItems(
+        context,
+        provider,
+        legacyBank: legacyBank,
+      ),
       onChanged: onChanged,
     );
   }
@@ -227,7 +244,7 @@ class HomeSheets {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        "Quick actions",
+                        getTranslated(ctx, 'Quick actions'),
                         style: text.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -238,7 +255,7 @@ class HomeSheets {
                 const SizedBox(height: 12),
                 ListTile(
                   leading: const Icon(Icons.shopping_bag_rounded),
-                  title: const Text("Add spending"),
+                  title: Text(getTranslated(ctx, 'Add spending')),
                   onTap: () {
                     Navigator.pop(ctx);
                     showAddOrEditSpendingSheet(
@@ -250,7 +267,7 @@ class HomeSheets {
                 ),
                 ListTile(
                   leading: const Icon(Icons.attach_money_rounded),
-                  title: const Text("Add income"),
+                  title: Text(getTranslated(ctx, 'Add income')),
                   onTap: () {
                     Navigator.pop(ctx);
                     showAddIncomeSheet(context, initialDate: initialDate);
@@ -258,7 +275,7 @@ class HomeSheets {
                 ),
                 ListTile(
                   leading: const Icon(Icons.event_repeat_rounded),
-                  title: const Text("Manage recurring payments"),
+                  title: Text(getTranslated(ctx, 'Manage recurring payments')),
                   onTap: () {
                     Navigator.pop(ctx);
                     showRecurringPaymentsSheet(context, provider);
@@ -315,7 +332,7 @@ class HomeSheets {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Export current period',
+                            getTranslated(ctx, 'Export current period'),
                             style: text.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -325,19 +342,19 @@ class HomeSheets {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Choose what and how to export:',
+                      getTranslated(ctx, 'Choose what and how to export:'),
                       style: text.bodySmall,
                     ),
                     const SizedBox(height: 16),
 
                     // ---- Scope: all vs specific category ----
-                    Text('Scope', style: text.bodyMedium),
+                    Text(getTranslated(ctx, 'Scope'), style: text.bodyMedium),
                     const SizedBox(height: 4),
                     RadioListTile<String>(
                       contentPadding: EdgeInsets.zero,
                       value: 'all',
                       groupValue: scope,
-                      title: const Text('All categories'),
+                      title: Text(getTranslated(ctx, 'All categories')),
                       onChanged: (v) {
                         setState(() {
                           scope = v!;
@@ -349,7 +366,7 @@ class HomeSheets {
                       contentPadding: EdgeInsets.zero,
                       value: 'category',
                       groupValue: scope,
-                      title: const Text('Specific category'),
+                      title: Text(getTranslated(ctx, 'Specific category')),
                       onChanged: (v) {
                         setState(() {
                           scope = v!;
@@ -365,7 +382,10 @@ class HomeSheets {
                           children: [
                             Row(
                               children: [
-                                Text('Categories', style: text.bodyMedium),
+                                Text(
+                                  getTranslated(ctx, 'Categories'),
+                                  style: text.bodyMedium,
+                                ),
                                 const Spacer(),
                                 TextButton(
                                   onPressed: categories.isEmpty
@@ -377,7 +397,7 @@ class HomeSheets {
                                               ..addAll(categories);
                                           });
                                         },
-                                  child: const Text('Select all'),
+                                  child: Text(getTranslated(ctx, 'Select all')),
                                 ),
                                 TextButton(
                                   onPressed: selectedCategories.isEmpty
@@ -385,7 +405,7 @@ class HomeSheets {
                                       : () {
                                           setState(selectedCategories.clear);
                                         },
-                                  child: const Text('Clear all'),
+                                  child: Text(getTranslated(ctx, 'Clear all')),
                                 ),
                               ],
                             ),
@@ -393,15 +413,31 @@ class HomeSheets {
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  'No categories available in the current period.',
+                                  getTranslated(
+                                    ctx,
+                                    'No categories available in the current period.',
+                                  ),
                                   style: text.bodySmall,
                                 ),
                               )
                             else ...[
                               Text(
                                 selectedCategories.isEmpty
-                                    ? 'No categories selected'
-                                    : '${selectedCategories.length} selected: ${selectedCategories.join(', ')}',
+                                    ? getTranslated(
+                                        ctx,
+                                        'No categories selected',
+                                      )
+                                    : getTranslatedWithArgs(
+                                        ctx,
+                                        '{count} selected: {categories}',
+                                        {
+                                          'count':
+                                              '${selectedCategories.length}',
+                                          'categories': selectedCategories.join(
+                                            ', ',
+                                          ),
+                                        },
+                                      ),
                                 style: text.bodySmall,
                               ),
                               const SizedBox(height: 10),
@@ -450,9 +486,12 @@ class HomeSheets {
                               if (scope == 'category' &&
                                   (filters == null || filters.isEmpty)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Please select at least one category first',
+                                      getTranslated(
+                                        context,
+                                        'Please select at least one category first',
+                                      ),
                                     ),
                                   ),
                                 );
@@ -468,9 +507,12 @@ class HomeSheets {
                                     );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Personal spendings exported as CSV',
+                                        getTranslated(
+                                          context,
+                                          'Personal spendings exported as CSV',
+                                        ),
                                       ),
                                     ),
                                   );
@@ -479,14 +521,20 @@ class HomeSheets {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Export failed: $e'),
+                                      content: Text(
+                                        getTranslatedWithArgs(
+                                          context,
+                                          'Export failed: {error}',
+                                          {'error': '$e'},
+                                        ),
+                                      ),
                                     ),
                                   );
                                 }
                               }
                             },
                             icon: const Icon(Icons.table_chart_outlined),
-                            label: const Text('CSV'),
+                            label: Text(getTranslated(ctx, 'CSV')),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -500,9 +548,12 @@ class HomeSheets {
                               if (scope == 'category' &&
                                   (filters == null || filters.isEmpty)) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Please select at least one category first',
+                                      getTranslated(
+                                        context,
+                                        'Please select at least one category first',
+                                      ),
                                     ),
                                   ),
                                 );
@@ -512,10 +563,17 @@ class HomeSheets {
                               Navigator.pop(ctx);
                               try {
                                 final defaultTitle = filters == null
-                                    ? 'Spending Report'
+                                    ? getTranslated(context, 'Spending Report')
                                     : filters.length == 1
-                                    ? '${filters.first} Spending Report'
-                                    : 'Selected Categories Spending Report';
+                                    ? getTranslatedWithArgs(
+                                        context,
+                                        '{category} Spending Report',
+                                        {'category': filters.first},
+                                      )
+                                    : getTranslated(
+                                        context,
+                                        'Selected Categories Spending Report',
+                                      );
                                 final reportTitle = await promptForReportTitle(
                                   context,
                                   initialTitle: defaultTitle,
@@ -531,9 +589,12 @@ class HomeSheets {
                                     );
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
+                                    SnackBar(
                                       content: Text(
-                                        'Personal spendings exported as PDF',
+                                        getTranslated(
+                                          context,
+                                          'Personal spendings exported as PDF',
+                                        ),
                                       ),
                                     ),
                                   );
@@ -542,14 +603,20 @@ class HomeSheets {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('Export failed: $e'),
+                                      content: Text(
+                                        getTranslatedWithArgs(
+                                          context,
+                                          'Export failed: {error}',
+                                          {'error': '$e'},
+                                        ),
+                                      ),
                                     ),
                                   );
                                 }
                               }
                             },
                             icon: const Icon(Icons.picture_as_pdf_outlined),
-                            label: const Text('PDF'),
+                            label: Text(getTranslated(ctx, 'PDF')),
                           ),
                         ),
                       ],
@@ -622,14 +689,20 @@ class HomeSheets {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Notification preferences',
+                                    getTranslated(
+                                      ctx,
+                                      'Notification preferences',
+                                    ),
                                     style: text.titleMedium?.copyWith(
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Choose which details appear in your daily spending summary.',
+                                    getTranslated(
+                                      ctx,
+                                      'Choose which details appear in your daily spending summary.',
+                                    ),
                                     style: text.bodySmall?.copyWith(
                                       color: cs.onSurfaceVariant,
                                     ),
@@ -646,9 +719,14 @@ class HomeSheets {
                             children: [
                               _buildNotificationPreferenceTile(
                                 context: ctx,
-                                title: 'Daily spending summary',
-                                subtitle:
-                                    'Receive the scheduled daily push notification.',
+                                title: getTranslated(
+                                  ctx,
+                                  'Daily spending summary',
+                                ),
+                                subtitle: getTranslated(
+                                  ctx,
+                                  'Receive the scheduled daily push notification.',
+                                ),
                                 value: prefs.dailySummaryEnabled,
                                 onChanged: (value) {
                                   sheetSetState(() {
@@ -660,9 +738,11 @@ class HomeSheets {
                               ),
                               _buildNotificationPreferenceTile(
                                 context: ctx,
-                                title: 'Budget context',
-                                subtitle:
-                                    'Include the budget used and remaining amount.',
+                                title: getTranslated(ctx, 'Budget context'),
+                                subtitle: getTranslated(
+                                  ctx,
+                                  'Include the budget used and remaining amount.',
+                                ),
                                 value: prefs.includeBudgetContext,
                                 enabled: prefs.dailySummaryEnabled,
                                 onChanged: (value) {
@@ -675,9 +755,14 @@ class HomeSheets {
                               ),
                               _buildNotificationPreferenceTile(
                                 context: ctx,
-                                title: 'Bank balance context',
-                                subtitle:
-                                    'Include the total balance and the lowest account balance.',
+                                title: getTranslated(
+                                  ctx,
+                                  'Bank balance context',
+                                ),
+                                subtitle: getTranslated(
+                                  ctx,
+                                  'Include the total balance and the lowest account balance.',
+                                ),
                                 value: prefs.includeBankContext,
                                 enabled: prefs.dailySummaryEnabled,
                                 onChanged: (value) {
@@ -690,9 +775,11 @@ class HomeSheets {
                               ),
                               _buildNotificationPreferenceTile(
                                 context: ctx,
-                                title: 'Other spending',
-                                subtitle:
-                                    'Include entries from the other spending section.',
+                                title: getTranslated(ctx, 'Other spending'),
+                                subtitle: getTranslated(
+                                  ctx,
+                                  'Include entries from the other spending section.',
+                                ),
                                 value: prefs.includeOtherSpending,
                                 enabled: prefs.dailySummaryEnabled,
                                 onChanged: (value) {
@@ -705,9 +792,14 @@ class HomeSheets {
                               ),
                               _buildNotificationPreferenceTile(
                                 context: ctx,
-                                title: 'Empty-day reminders',
-                                subtitle:
-                                    'Notify you even when no spending was recorded.',
+                                title: getTranslated(
+                                  ctx,
+                                  'Empty-day reminders',
+                                ),
+                                subtitle: getTranslated(
+                                  ctx,
+                                  'Notify you even when no spending was recorded.',
+                                ),
                                 value: prefs.notifyWhenNoSpending,
                                 enabled: prefs.dailySummaryEnabled,
                                 onChanged: (value) {
@@ -738,9 +830,11 @@ class HomeSheets {
                               if (context.mounted) Navigator.pop(ctx);
                             },
                             icon: const Icon(Icons.save_rounded),
-                            label: const Text(
-                              'Save preferences',
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                            label: Text(
+                              getTranslated(ctx, 'Save preferences'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -871,7 +965,7 @@ class HomeSheets {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            "Set Budget Amount",
+                            getTranslated(ctx, 'Set Budget Amount'),
                             style: text.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -883,15 +977,21 @@ class HomeSheets {
                               decimal: true,
                             ),
                             textInputAction: TextInputAction.next,
-                            decoration: const InputDecoration(
-                              labelText: "Enter budget amount for this period",
+                            decoration: InputDecoration(
+                              labelText: getTranslated(
+                                ctx,
+                                'Enter budget amount for this period',
+                              ),
                               border: OutlineInputBorder(),
                             ),
                             validator: (value) {
                               final parsed =
                                   double.tryParse(value?.trim() ?? '') ?? 0;
                               if (parsed <= 0) {
-                                return "Please enter a valid amount";
+                                return getTranslated(
+                                  ctx,
+                                  'Please enter a valid amount',
+                                );
                               }
                               return null;
                             },
@@ -901,7 +1001,11 @@ class HomeSheets {
                             children: [
                               Expanded(
                                 child: Text(
-                                  "Bank accounts (${editableBanks.length}/20)",
+                                  getTranslatedWithArgs(
+                                    ctx,
+                                    'Bank accounts ({count}/20)',
+                                    {'count': '${editableBanks.length}'},
+                                  ),
                                   style: text.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -921,7 +1025,7 @@ class HomeSheets {
                                         });
                                       },
                                 icon: const Icon(Icons.add_rounded),
-                                label: const Text("Add bank"),
+                                label: Text(getTranslated(ctx, 'Add bank')),
                               ),
                             ],
                           ),
@@ -930,7 +1034,10 @@ class HomeSheets {
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                "Press and drag to reorder. Deleting one bank will not affect the others.",
+                                getTranslated(
+                                  ctx,
+                                  'Press and drag to reorder. Deleting one bank will not affect the others.',
+                                ),
                                 style: text.bodyMedium?.copyWith(
                                   color: cs.onSurfaceVariant,
                                 ),
@@ -991,7 +1098,11 @@ class HomeSheets {
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                "Bank ${index + 1}",
+                                                getTranslatedWithArgs(
+                                                  ctx,
+                                                  'Bank {number}',
+                                                  {'number': '${index + 1}'},
+                                                ),
                                                 style: text.bodyMedium
                                                     ?.copyWith(
                                                       fontWeight:
@@ -1000,7 +1111,10 @@ class HomeSheets {
                                               ),
                                             ),
                                             IconButton(
-                                              tooltip: "Delete bank account",
+                                              tooltip: getTranslated(
+                                                ctx,
+                                                'Delete bank account',
+                                              ),
                                               onPressed: () {
                                                 sheetSetState(() {
                                                   final removed = editableBanks
@@ -1032,16 +1146,20 @@ class HomeSheets {
                                                 controller: bank.nameController,
                                                 textInputAction:
                                                     TextInputAction.next,
-                                                decoration:
-                                                    const InputDecoration(
-                                                      labelText: "Bank name",
-                                                      border:
-                                                          OutlineInputBorder(),
-                                                    ),
+                                                decoration: InputDecoration(
+                                                  labelText: getTranslated(
+                                                    ctx,
+                                                    'Bank name',
+                                                  ),
+                                                  border: OutlineInputBorder(),
+                                                ),
                                                 validator: (value) {
                                                   if (value == null ||
                                                       value.trim().isEmpty) {
-                                                    return "Required";
+                                                    return getTranslated(
+                                                      ctx,
+                                                      'Required',
+                                                    );
                                                   }
                                                   return null;
                                                 },
@@ -1057,12 +1175,13 @@ class HomeSheets {
                                                     const TextInputType.numberWithOptions(
                                                       decimal: true,
                                                     ),
-                                                decoration:
-                                                    const InputDecoration(
-                                                      labelText: "Balance",
-                                                      border:
-                                                          OutlineInputBorder(),
-                                                    ),
+                                                decoration: InputDecoration(
+                                                  labelText: getTranslated(
+                                                    ctx,
+                                                    'Balance',
+                                                  ),
+                                                  border: OutlineInputBorder(),
+                                                ),
                                                 validator: (value) {
                                                   final parsed =
                                                       double.tryParse(
@@ -1070,7 +1189,10 @@ class HomeSheets {
                                                       );
                                                   if (parsed == null ||
                                                       parsed < 0) {
-                                                    return "Invalid";
+                                                    return getTranslated(
+                                                      ctx,
+                                                      'Invalid',
+                                                    );
                                                   }
                                                   return null;
                                                 },
@@ -1095,7 +1217,10 @@ class HomeSheets {
                                 border: Border.all(color: cs.outlineVariant),
                               ),
                               child: Text(
-                                "No bank accounts added yet. Use Add bank to create one.",
+                                getTranslated(
+                                  ctx,
+                                  'No bank accounts added yet. Use Add bank to create one.',
+                                ),
                                 style: text.bodyMedium?.copyWith(
                                   color: cs.onSurfaceVariant,
                                 ),
@@ -1115,8 +1240,8 @@ class HomeSheets {
                                 ),
                               ),
                               icon: const Icon(Icons.save_rounded),
-                              label: const Text(
-                                "Save budget",
+                              label: Text(
+                                getTranslated(ctx, 'Save budget'),
                                 style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                               onPressed: () async {
@@ -1134,7 +1259,11 @@ class HomeSheets {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(
-                                          "Duplicate bank account: $name",
+                                          getTranslatedWithArgs(
+                                            ctx,
+                                            'Duplicate bank account: {name}',
+                                            {'name': name},
+                                          ),
                                         ),
                                       ),
                                     );
@@ -1196,7 +1325,10 @@ class HomeSheets {
     String bankSelection = _noBankValue;
 
     DateTime selectedDate = initialDate;
-    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
+    final dateFormat = DateFormat(
+      'EEE, yyyy-MM-dd',
+      Localizations.localeOf(context).languageCode,
+    );
 
     showModalBottomSheet(
       context: context,
@@ -1228,7 +1360,7 @@ class HomeSheets {
                     const Icon(Icons.attach_money_rounded, size: 35),
                     const SizedBox(height: 10),
                     Text(
-                      "Add / Edit Spending",
+                      getTranslated(ctx, 'Add / Edit Spending'),
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
@@ -1238,7 +1370,9 @@ class HomeSheets {
                       children: [
                         Expanded(
                           child: Text(
-                            "Date: ${dateFormat.format(selectedDate)}",
+                            getTranslatedWithArgs(ctx, 'Date: {date}', {
+                              'date': dateFormat.format(selectedDate),
+                            }),
                             style: Theme.of(ctx).textTheme.bodyMedium,
                           ),
                         ),
@@ -1260,7 +1394,7 @@ class HomeSheets {
                             Icons.calendar_today_rounded,
                             size: 18,
                           ),
-                          label: const Text("Pick date"),
+                          label: Text(getTranslated(ctx, 'Pick date')),
                         ),
                       ],
                     ),
@@ -1269,7 +1403,11 @@ class HomeSheets {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Current total for this date: ${currentForDate.toStringAsFixed(2)}",
+                        getTranslatedWithArgs(
+                          ctx,
+                          'Current total for this date: {amount}',
+                          {'amount': currentForDate.toStringAsFixed(2)},
+                        ),
                         style: Theme.of(
                           ctx,
                         ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -1323,9 +1461,12 @@ class HomeSheets {
                             return TextField(
                               controller: textController,
                               focusNode: focusNode,
-                              decoration: const InputDecoration(
-                                labelText: "Category (optional)",
-                                hintText: "Start typing…",
+                              decoration: InputDecoration(
+                                labelText: getTranslated(
+                                  ctx,
+                                  'Category (optional)',
+                                ),
+                                hintText: getTranslated(ctx, 'Start typing...'),
                                 border: OutlineInputBorder(),
                               ),
                               textInputAction: TextInputAction.done,
@@ -1396,9 +1537,9 @@ class HomeSheets {
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Amount",
-                        hintText: "e.g. 45.75",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Amount'),
+                        hintText: getTranslated(ctx, 'e.g. 45.75'),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1406,14 +1547,18 @@ class HomeSheets {
 
                     TextField(
                       controller: itemController,
-                      decoration: const InputDecoration(
-                        labelText: "Item / what did you spend on (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          ctx,
+                          'Item / what did you spend on (optional)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
 
                     _bankAccountDropdown(
+                      context: ctx,
                       provider: provider,
                       value: bankSelection,
                       onChanged: (value) {
@@ -1428,8 +1573,11 @@ class HomeSheets {
                     TextField(
                       controller: qtyController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Quantity (optional) — default 1",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          ctx,
+                          'Quantity (optional) - default 1',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1490,8 +1638,8 @@ class HomeSheets {
                               Icons.add_rounded,
                               color: Colors.white,
                             ),
-                            label: const Text(
-                              "Add to this date",
+                            label: Text(
+                              getTranslated(ctx, 'Add to this date'),
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,
@@ -1545,8 +1693,8 @@ class HomeSheets {
                               }
                             },
                             icon: const Icon(Icons.save_rounded),
-                            label: const Text(
-                              "Replace this date",
+                            label: Text(
+                              getTranslated(ctx, 'Replace this date'),
                               style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -1573,7 +1721,10 @@ class HomeSheets {
     final sourceController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = initialDate;
-    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
+    final dateFormat = DateFormat(
+      'EEE, yyyy-MM-dd',
+      Localizations.localeOf(context).languageCode,
+    );
 
     showModalBottomSheet(
       context: context,
@@ -1603,7 +1754,7 @@ class HomeSheets {
                     const Icon(Icons.attach_money_rounded, size: 35),
                     const SizedBox(height: 10),
                     Text(
-                      "Add Income",
+                      getTranslated(ctx, 'Add Income'),
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
@@ -1613,7 +1764,9 @@ class HomeSheets {
                       children: [
                         Expanded(
                           child: Text(
-                            "Date: ${dateFormat.format(selectedDate)}",
+                            getTranslatedWithArgs(ctx, 'Date: {date}', {
+                              'date': dateFormat.format(selectedDate),
+                            }),
                             style: Theme.of(ctx).textTheme.bodyMedium,
                           ),
                         ),
@@ -1635,7 +1788,7 @@ class HomeSheets {
                             Icons.calendar_today_rounded,
                             size: 18,
                           ),
-                          label: const Text("Pick date"),
+                          label: Text(getTranslated(ctx, 'Pick date')),
                         ),
                       ],
                     ),
@@ -1644,7 +1797,11 @@ class HomeSheets {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Current income for this date: ${currentIncomeForDate.toStringAsFixed(2)}",
+                        getTranslatedWithArgs(
+                          ctx,
+                          'Current income for this date: {amount}',
+                          {'amount': currentIncomeForDate.toStringAsFixed(2)},
+                        ),
                         style: Theme.of(
                           ctx,
                         ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -1655,25 +1812,28 @@ class HomeSheets {
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Amount",
-                        hintText: "e.g. 5000.00",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Amount'),
+                        hintText: getTranslated(ctx, 'e.g. 5000.00'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: sourceController,
-                      decoration: const InputDecoration(
-                        labelText: "Source (e.g. Salary, Bonus)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          ctx,
+                          'Source (e.g. Salary, Bonus)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: noteController,
-                      decoration: const InputDecoration(
-                        labelText: "Note (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Note (optional)'),
                         border: OutlineInputBorder(),
                       ),
                       maxLines: 2,
@@ -1712,8 +1872,8 @@ class HomeSheets {
                         }
                       },
                       icon: const Icon(Icons.add_rounded),
-                      label: const Text(
-                        "Add income",
+                      label: Text(
+                        getTranslated(ctx, 'Add income'),
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -1734,7 +1894,10 @@ class HomeSheets {
   ) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
+    final dateFormat = DateFormat(
+      'EEE, yyyy-MM-dd',
+      Localizations.localeOf(context).languageCode,
+    );
 
     final titleController = TextEditingController();
     final amountController = TextEditingController();
@@ -1811,7 +1974,7 @@ class HomeSheets {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Recurring payments',
+                            getTranslated(ctx, 'Recurring payments'),
                             style: text.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -1823,7 +1986,10 @@ class HomeSheets {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Schedule monthly, weekly, or one-time payments. If auto-add is on, the app records the spending automatically when it becomes due.',
+                        getTranslated(
+                          ctx,
+                          'Schedule monthly, weekly, or one-time payments. If auto-add is on, the app records the spending automatically when it becomes due.',
+                        ),
                         style: text.bodySmall,
                       ),
                     ),
@@ -1832,7 +1998,7 @@ class HomeSheets {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Existing recurring payments',
+                          getTranslated(ctx, 'Existing recurring payments'),
                           style: text.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -1841,11 +2007,20 @@ class HomeSheets {
                       const SizedBox(height: 8),
                       ...list.map((payment) {
                         final due = provider.getNextDueDate(payment);
-                        final dueStr = DateFormat('EEE, MMM d').format(due);
+                        final dueStr = DateFormat(
+                          'EEE, MMM d',
+                          Localizations.localeOf(ctx).languageCode,
+                        ).format(due);
                         final frequencyLabel = switch (payment.frequency) {
-                          RecurringFrequency.monthly => 'Monthly',
-                          RecurringFrequency.weekly => 'Weekly',
-                          RecurringFrequency.once => 'Once',
+                          RecurringFrequency.monthly => getTranslated(
+                            ctx,
+                            'Monthly',
+                          ),
+                          RecurringFrequency.weekly => getTranslated(
+                            ctx,
+                            'Weekly',
+                          ),
+                          RecurringFrequency.once => getTranslated(ctx, 'Once'),
                         };
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -1877,29 +2052,68 @@ class HomeSheets {
                                     Text(
                                       payment.frequency ==
                                               RecurringFrequency.monthly
-                                          ? '$frequencyLabel - day ${payment.dayOfMonth} - next: $dueStr'
+                                          ? getTranslatedWithArgs(
+                                              ctx,
+                                              '{frequency} - day {day} - next: {date}',
+                                              {
+                                                'frequency': frequencyLabel,
+                                                'day': '${payment.dayOfMonth}',
+                                                'date': dueStr,
+                                              },
+                                            )
                                           : payment.frequency ==
                                                 RecurringFrequency.weekly
-                                          ? '$frequencyLabel - starts ${dateFormat.format(payment.startDate)} - next: $dueStr'
-                                          : '$frequencyLabel - due $dueStr',
+                                          ? getTranslatedWithArgs(
+                                              ctx,
+                                              '{frequency} - starts {startDate} - next: {date}',
+                                              {
+                                                'frequency': frequencyLabel,
+                                                'startDate': dateFormat.format(
+                                                  payment.startDate,
+                                                ),
+                                                'date': dueStr,
+                                              },
+                                            )
+                                          : getTranslatedWithArgs(
+                                              ctx,
+                                              '{frequency} - due {date}',
+                                              {
+                                                'frequency': frequencyLabel,
+                                                'date': dueStr,
+                                              },
+                                            ),
                                       style: text.bodySmall,
                                     ),
                                     if (payment.category != null &&
                                         payment.category!.trim().isNotEmpty)
                                       Text(
-                                        'Category: ${payment.category}',
+                                        getTranslatedWithArgs(
+                                          ctx,
+                                          'Category: {category}',
+                                          {'category': payment.category!},
+                                        ),
                                         style: text.bodySmall,
                                       ),
                                     if (payment.bank != null &&
                                         payment.bank!.trim().isNotEmpty)
                                       Text(
-                                        'Payment source: ${payment.bank}',
+                                        getTranslatedWithArgs(
+                                          ctx,
+                                          'Payment source: {bank}',
+                                          {'bank': payment.bank!},
+                                        ),
                                         style: text.bodySmall,
                                       ),
                                     Text(
                                       payment.autoAdd
-                                          ? 'Auto-add is enabled'
-                                          : 'Auto-add is disabled',
+                                          ? getTranslated(
+                                              ctx,
+                                              'Auto-add is enabled',
+                                            )
+                                          : getTranslated(
+                                              ctx,
+                                              'Auto-add is disabled',
+                                            ),
                                       style: text.bodySmall?.copyWith(
                                         color: payment.autoAdd
                                             ? Colors.green
@@ -1911,7 +2125,10 @@ class HomeSheets {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, size: 20),
-                                tooltip: 'Edit recurring payment',
+                                tooltip: getTranslated(
+                                  ctx,
+                                  'Edit recurring payment',
+                                ),
                                 onPressed: () => populateForm(payment),
                               ),
                               IconButton(
@@ -1919,7 +2136,10 @@ class HomeSheets {
                                   Icons.delete_outline,
                                   size: 20,
                                 ),
-                                tooltip: 'Delete recurring payment',
+                                tooltip: getTranslated(
+                                  ctx,
+                                  'Delete recurring payment',
+                                ),
                                 onPressed: () async {
                                   await provider.removeRecurringPayment(
                                     payment.id,
@@ -1941,8 +2161,8 @@ class HomeSheets {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         isEditing
-                            ? 'Edit recurring payment'
-                            : 'Add new recurring payment',
+                            ? getTranslated(ctx, 'Edit recurring payment')
+                            : getTranslated(ctx, 'Add new recurring payment'),
                         style: text.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -1951,8 +2171,11 @@ class HomeSheets {
                     const SizedBox(height: 8),
                     TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Title (e.g. Rent, Gym, Netflix)',
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          ctx,
+                          'Title (e.g. Rent, Gym, Netflix)',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1962,8 +2185,8 @@ class HomeSheets {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Amount'),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1971,22 +2194,22 @@ class HomeSheets {
                     DropdownButtonFormField<RecurringFrequency>(
                       key: ValueKey(selectedFrequency),
                       initialValue: selectedFrequency,
-                      decoration: const InputDecoration(
-                        labelText: 'Repeat schedule',
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Repeat schedule'),
                         border: OutlineInputBorder(),
                       ),
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: RecurringFrequency.monthly,
-                          child: Text('Monthly'),
+                          child: Text(getTranslated(ctx, 'Monthly')),
                         ),
                         DropdownMenuItem(
                           value: RecurringFrequency.weekly,
-                          child: Text('Weekly'),
+                          child: Text(getTranslated(ctx, 'Weekly')),
                         ),
                         DropdownMenuItem(
                           value: RecurringFrequency.once,
-                          child: Text('Once'),
+                          child: Text(getTranslated(ctx, 'Once')),
                         ),
                       ],
                       onChanged: (value) {
@@ -2019,8 +2242,8 @@ class HomeSheets {
                         decoration: InputDecoration(
                           labelText:
                               selectedFrequency == RecurringFrequency.once
-                              ? 'Due date'
-                              : 'Start date',
+                              ? getTranslated(ctx, 'Due date')
+                              : getTranslated(ctx, 'Start date'),
                           border: OutlineInputBorder(),
                         ),
                         child: Row(
@@ -2030,7 +2253,7 @@ class HomeSheets {
                             Expanded(
                               child: Text(dateFormat.format(selectedStartDate)),
                             ),
-                            const Text('Change'),
+                            Text(getTranslated(ctx, 'Change')),
                           ],
                         ),
                       ),
@@ -2040,8 +2263,8 @@ class HomeSheets {
                       TextField(
                         controller: dayController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Day of month (1-31)',
+                        decoration: InputDecoration(
+                          labelText: getTranslated(ctx, 'Day of month (1-31)'),
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -2051,8 +2274,14 @@ class HomeSheets {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           selectedFrequency == RecurringFrequency.weekly
-                              ? 'Weekly payments repeat every 7 days starting from the selected start date.'
-                              : 'This payment is scheduled once on the selected due date.',
+                              ? getTranslated(
+                                  ctx,
+                                  'Weekly payments repeat every 7 days starting from the selected start date.',
+                                )
+                              : getTranslated(
+                                  ctx,
+                                  'This payment is scheduled once on the selected due date.',
+                                ),
                           style: text.bodySmall,
                         ),
                       ),
@@ -2060,13 +2289,14 @@ class HomeSheets {
                     const SizedBox(height: 8),
                     TextField(
                       controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Category (optional)',
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Category (optional)'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 8),
                     _bankAccountDropdown(
+                      context: ctx,
                       provider: provider,
                       value: bankSelection,
                       onChanged: (value) {
@@ -2078,7 +2308,9 @@ class HomeSheets {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Auto-add spending on due day'),
+                      title: Text(
+                        getTranslated(ctx, 'Auto-add spending on due day'),
+                      ),
                       value: autoAdd,
                       onChanged: (val) {
                         sheetSetState(() {
@@ -2099,7 +2331,7 @@ class HomeSheets {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                              child: const Text('Cancel edit'),
+                              child: Text(getTranslated(ctx, 'Cancel edit')),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -2141,8 +2373,14 @@ class HomeSheets {
                                     content: Text(
                                       selectedFrequency ==
                                               RecurringFrequency.monthly
-                                          ? 'Please enter a valid title, amount, and day of month.'
-                                          : 'Please enter a valid title and amount.',
+                                          ? getTranslated(
+                                              ctx,
+                                              'Please enter a valid title, amount, and day of month.',
+                                            )
+                                          : getTranslated(
+                                              ctx,
+                                              'Please enter a valid title and amount.',
+                                            ),
                                     ),
                                   ),
                                 );
@@ -2198,8 +2436,14 @@ class HomeSheets {
                             ),
                             label: Text(
                               isEditing
-                                  ? 'Update recurring payment'
-                                  : 'Save recurring payment',
+                                  ? getTranslated(
+                                      ctx,
+                                      'Update recurring payment',
+                                    )
+                                  : getTranslated(
+                                      ctx,
+                                      'Save recurring payment',
+                                    ),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                               ),
@@ -2239,7 +2483,10 @@ class HomeSheets {
     final categoryController = TextEditingController(
       text: entry.category ?? '',
     );
-    final dateFormat = DateFormat('EEE, yyyy-MM-dd');
+    final dateFormat = DateFormat(
+      'EEE, yyyy-MM-dd',
+      Localizations.localeOf(context).languageCode,
+    );
     DateTime selectedDate = date;
     String bankSelection =
         provider.findBankAccountId(
@@ -2274,14 +2521,16 @@ class HomeSheets {
                     const Icon(Icons.edit, size: 35),
                     const SizedBox(height: 10),
                     Text(
-                      "Edit Entry",
+                      getTranslated(ctx, 'Edit Entry'),
                       style: Theme.of(ctx).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 20),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Date: ${dateFormat.format(selectedDate)}",
+                        getTranslatedWithArgs(ctx, 'Date: {date}', {
+                          'date': dateFormat.format(selectedDate),
+                        }),
                         style: Theme.of(ctx).textTheme.bodyMedium,
                       ),
                     ),
@@ -2306,28 +2555,29 @@ class HomeSheets {
                           Icons.calendar_today_rounded,
                           size: 18,
                         ),
-                        label: const Text("Change date"),
+                        label: Text(getTranslated(ctx, 'Change date')),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Amount",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Amount'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: itemController,
-                      decoration: const InputDecoration(
-                        labelText: "Item (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Item (optional)'),
                         border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     _bankAccountDropdown(
+                      context: ctx,
                       provider: provider,
                       value: bankSelection,
                       legacyBank: entry.bank,
@@ -2341,8 +2591,11 @@ class HomeSheets {
                     TextField(
                       controller: qtyController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: "Quantity (optional) — default 1",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(
+                          ctx,
+                          'Quantity (optional) - default 1',
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -2351,8 +2604,8 @@ class HomeSheets {
                     // (You can also make category autocomplete here later if you want)
                     TextField(
                       controller: categoryController,
-                      decoration: const InputDecoration(
-                        labelText: "Category (optional)",
+                      decoration: InputDecoration(
+                        labelText: getTranslated(ctx, 'Category (optional)'),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -2402,7 +2655,7 @@ class HomeSheets {
                         }
                       },
                       icon: const Icon(Icons.save_rounded),
-                      label: const Text("Save changes"),
+                      label: Text(getTranslated(ctx, 'Save changes')),
                     ),
                     const SizedBox(height: 10),
                   ],

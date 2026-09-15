@@ -1251,9 +1251,11 @@ class SpendingProvider extends ChangeNotifier {
   }
 
   Future<void> processRecurringPayments({DateTime? now}) async {
-    final currentDate = _dateOnly(now ?? DateTime.now());
+    final currentMoment = now ?? DateTime.now();
+    final currentDate = _dateOnly(currentMoment);
     final generatedToday = <RecurringPayment>[];
     final generatedMissed = <RecurringPayment>[];
+    final completedOncePaymentIds = <String>{};
     var changed = false;
 
     for (var index = 0; index < _recurringPayments.length; index++) {
@@ -1265,8 +1267,25 @@ class SpendingProvider extends ChangeNotifier {
         final occurrenceKey = _dateKey(dueDate);
         if (processedKeys.contains(occurrenceKey)) continue;
 
+        // Due dates do not carry a time. Match the backend's 09:00 Riyadh
+        // execution time so opening the app earlier cannot create the payment
+        // before the scheduled notification is sent.
+        final dueExecutionTime = DateTime(
+          dueDate.year,
+          dueDate.month,
+          dueDate.day,
+          9,
+        );
+        if (_isSameDate(dueDate, currentDate) &&
+            currentMoment.isBefore(dueExecutionTime)) {
+          continue;
+        }
+
         if (_hasRecurringOccurrenceRecorded(payment, dueDate, occurrenceKey)) {
           processedKeys.add(occurrenceKey);
+          if (payment.frequency == RecurringFrequency.once) {
+            completedOncePaymentIds.add(payment.id);
+          }
           changed = true;
           continue;
         }
@@ -1290,6 +1309,9 @@ class SpendingProvider extends ChangeNotifier {
             generatedMissed.add(payment);
           }
           processedKeys.add(occurrenceKey);
+          if (payment.frequency == RecurringFrequency.once) {
+            completedOncePaymentIds.add(payment.id);
+          }
           changed = true;
         }
       }
@@ -1297,6 +1319,19 @@ class SpendingProvider extends ChangeNotifier {
       _recurringPayments[index] = payment.copyWith(
         processedOccurrenceKeys: processedKeys.toList()..sort(),
       );
+    }
+
+    if (completedOncePaymentIds.isNotEmpty) {
+      final completedPayments = _recurringPayments
+          .where((payment) => completedOncePaymentIds.contains(payment.id))
+          .toList();
+      for (final payment in completedPayments) {
+        await _cancelRecurringReminderNotification(payment);
+      }
+      _recurringPayments.removeWhere(
+        (payment) => completedOncePaymentIds.contains(payment.id),
+      );
+      changed = true;
     }
 
     if (changed) {
@@ -1410,32 +1445,14 @@ class SpendingProvider extends ChangeNotifier {
     final now = referenceDate ?? DateTime.now();
     for (final payment in _recurringPayments) {
       final dueDate = getNextDueDate(payment, from: now);
-      final reminderAt = DateTime(
-        dueDate.year,
-        dueDate.month,
-        dueDate.day,
-        9,
-      ).subtract(const Duration(days: 1));
       final notificationKey = _recurringReminderNotificationKey(
         payment,
         dueDate,
       );
 
-      if (reminderAt.isAfter(now)) {
-        final title = await getTranslatedForCurrentLocale(
-          'Upcoming recurring payment',
-        );
-        await NotificationService.scheduleNotification(
-          notificationKey: notificationKey,
-          title: title,
-          body:
-              '${payment.title} is due on ${_dateKey(dueDate)} for ${payment.amount.toStringAsFixed(2)} SAR.',
-          scheduledAt: reminderAt,
-          payload: notificationKey,
-        );
-      } else {
-        await NotificationService.cancelNotificationByKey(notificationKey);
-      }
+      // Recurring payments now execute and notify from the backend at the due
+      // time. Clear the old device-only day-before reminder if it was scheduled.
+      await NotificationService.cancelNotificationByKey(notificationKey);
     }
   }
 
@@ -1871,18 +1888,32 @@ class SpendingProvider extends ChangeNotifier {
   }
 
   /// suggestions based on current data
-  List<String> getSmartRecommendations() {
+  List<String> getSmartRecommendations({
+    String Function(String key, Map<String, String> args)? translate,
+  }) {
     final List<String> recs = [];
+    String text(String key, [Map<String, String> args = const {}]) {
+      if (translate != null) return translate(key, args);
+      var value = key;
+      args.forEach((placeholder, replacement) {
+        value = value.replaceAll('{$placeholder}', replacement);
+      });
+      return value;
+    }
 
     if (_monthlyBudget > 0) {
       final ratio = _periodTotal / _monthlyBudget;
       if (ratio >= 0.9 && ratio < 1.0) {
         recs.add(
-          "You are close to this period's budget. Consider lowering variable expenses.",
+          text(
+            "You are close to this period's budget. Consider lowering variable expenses.",
+          ),
         );
       } else if (ratio >= 1.0) {
         recs.add(
-          "You exceeded your budget. Next period, increase the budget or reduce daily spending.",
+          text(
+            "You exceeded your budget. Next period, increase the budget or reduce daily spending.",
+          ),
         );
       }
     }
@@ -1893,26 +1924,38 @@ class SpendingProvider extends ChangeNotifier {
     if (sortedCats.isNotEmpty) {
       final top = sortedCats.first;
       recs.add(
-        "Your highest spending is on '${top.key}'. You can set a sub-budget for this category.",
+        text(
+          "Your highest spending is on '{category}'. You can set a sub-budget for this category.",
+          {'category': top.key},
+        ),
       );
     }
 
     final overspends = getOverSpendDaysInPeriod();
     if (overspends.length >= 2) {
       recs.add(
-        "You overspent on ${overspends.length} days. Try to spread big purchases across days.",
+        text(
+          'You overspent on {count} days. Try to spread big purchases across days.',
+          {'count': '${overspends.length}'},
+        ),
       );
     }
 
     final avg = getAveragePerDayInPeriod();
     if (dailyAllowance > 0 && avg > dailyAllowance) {
       recs.add(
-        "Your average per day (${avg.toStringAsFixed(2)}) is higher than your daily target (${dailyAllowance.toStringAsFixed(2)}).",
+        text(
+          'Your average per day ({average}) is higher than your daily target ({target}).',
+          {
+            'average': avg.toStringAsFixed(2),
+            'target': dailyAllowance.toStringAsFixed(2),
+          },
+        ),
       );
     }
 
     if (recs.isEmpty) {
-      recs.add("You're on track 👍 Keep recording your spending.");
+      recs.add(text("You're on track. Keep recording your spending."));
     }
 
     return recs;
@@ -2212,8 +2255,18 @@ class SpendingProvider extends ChangeNotifier {
     return null;
   }
 
-  List<String> getForecastMessages() {
+  List<String> getForecastMessages({
+    String Function(String key, Map<String, String> args)? translate,
+  }) {
     final List<String> msgs = [];
+    String text(String key, [Map<String, String> args = const {}]) {
+      if (translate != null) return translate(key, args);
+      var value = key;
+      args.forEach((placeholder, replacement) {
+        value = value.replaceAll('{$placeholder}', replacement);
+      });
+      return value;
+    }
 
     if (_periodStart == null || _periodEnd == null) {
       return msgs;
@@ -2224,11 +2277,17 @@ class SpendingProvider extends ChangeNotifier {
 
     if (daysLeft > 0) {
       msgs.add(
-        "If you continue like this, you’ll spend about ${projected.toStringAsFixed(2)} SAR by the end of this period.",
+        text(
+          'If you continue like this, you will spend about {amount} SAR by the end of this period.',
+          {'amount': projected.toStringAsFixed(2)},
+        ),
       );
     } else {
       msgs.add(
-        "This period is almost over. Total spending settled around ${_periodTotal.toStringAsFixed(2)} SAR.",
+        text(
+          'This period is almost over. Total spending settled around {amount} SAR.',
+          {'amount': _periodTotal.toStringAsFixed(2)},
+        ),
       );
     }
 
@@ -2236,11 +2295,17 @@ class SpendingProvider extends ChangeNotifier {
       final diff = projected - _monthlyBudget;
       if (diff > 0) {
         msgs.add(
-          "At your current rate, you may exceed your budget by ${diff.toStringAsFixed(2)} SAR.",
+          text(
+            'At your current rate, you may exceed your budget by {amount} SAR.',
+            {'amount': diff.toStringAsFixed(2)},
+          ),
         );
       } else {
         msgs.add(
-          "Good job! You’re on track to stay within your budget with around ${(-diff).toStringAsFixed(2)} SAR to spare.",
+          text(
+            'Good job! You are on track to stay within your budget with around {amount} SAR to spare.',
+            {'amount': (-diff).toStringAsFixed(2)},
+          ),
         );
       }
     }
@@ -2248,7 +2313,11 @@ class SpendingProvider extends ChangeNotifier {
     final cats = getCategoryTotalsForPeriod();
     if (cats.isNotEmpty) {
       final top = cats.entries.reduce((a, b) => a.value >= b.value ? a : b);
-      msgs.add("Your highest spending category so far is '${top.key}'.");
+      msgs.add(
+        text('Your highest spending category so far is {category}.', {
+          'category': top.key,
+        }),
+      );
     }
 
     return msgs;
